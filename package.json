@@ -1,0 +1,17 @@
+{
+  "name": "pixel-collector",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pixel Collector — arcade collector / press-your-luck roguelite",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
