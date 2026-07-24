@@ -346,7 +346,10 @@ export class Ui {
     const owned = new Set(p.ownedSkins)
 
     const skins = SKINS.map((s) => {
-      const isOwned = owned.has(s.id) || s.unlock.kind === 'default'
+      // Album skins are never written into ownedSkins — they unlock by condition,
+      // so the check has to look at the album too or they stay stuck at "x/y".
+      const byAlbum = s.unlock.kind === 'album' && p.specimens.length >= s.unlock.count
+      const isOwned = owned.has(s.id) || s.unlock.kind === 'default' || byAlbum
       const equipped = p.skin === s.id
       let action: string
       if (equipped) action = '<button disabled>ÉQUIPÉ</button>'

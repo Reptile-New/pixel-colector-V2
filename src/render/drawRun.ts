@@ -269,10 +269,17 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
   ctx.save()
   ctx.textBaseline = 'alphabetic'
 
-  // Score (banked, safe)
-  ctx.font = `700 34px ${MONO}`
+  // Score (banked, safe). Shrinks rather than colliding with the centre column.
+  const scoreText = fmt(run.stats.score)
+  let scoreSize = 34
+  ctx.font = `700 ${scoreSize}px ${MONO}`
+  const maxScoreWidth = r.w * 0.4
+  if (ctx.measureText(scoreText).width > maxScoreWidth) {
+    scoreSize = Math.max(18, Math.floor((scoreSize * maxScoreWidth) / ctx.measureText(scoreText).width))
+    ctx.font = `700 ${scoreSize}px ${MONO}`
+  }
   ctx.fillStyle = COLORS.text
-  ctx.fillText(fmt(run.stats.score), 18, 52)
+  ctx.fillText(scoreText, 18, 52)
   ctx.font = `500 10px ${MONO}`
   ctx.fillStyle = COLORS.dim
   ctx.fillText('SÉCURISÉ', 18, 66)
@@ -282,9 +289,16 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
     const heat = clamp(run.buffer / 5000, 0, 1)
     const wob = Math.sin(t * (7 + heat * 12)) * heat * 1.6
     ctx.textAlign = 'right'
-    ctx.font = `700 ${26 + heat * 12}px ${MONO}`
+    const bufText = fmt(run.buffer)
+    let bufSize = 26 + heat * 12
+    ctx.font = `700 ${bufSize}px ${MONO}`
+    const maxBufWidth = r.w * 0.36
+    if (ctx.measureText(bufText).width > maxBufWidth) {
+      bufSize = Math.max(16, (bufSize * maxBufWidth) / ctx.measureText(bufText).width)
+      ctx.font = `700 ${bufSize}px ${MONO}`
+    }
     ctx.fillStyle = rgba(COLORS.vault, 0.85 + heat * 0.15)
-    ctx.fillText(fmt(run.buffer), r.w - 18 + wob, 48)
+    ctx.fillText(bufText, r.w - 18 + wob, 48)
     ctx.font = `500 10px ${MONO}`
     ctx.fillStyle = rgba(COLORS.vaultGlow, 0.55 + heat * 0.45)
     ctx.fillText('EN RISQUE', r.w - 18, 62)
@@ -313,7 +327,7 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
     ctx.font = `500 10px ${MONO}`
     ctx.textAlign = 'center'
     ctx.fillStyle = COLORS.dim
-    ctx.fillText(`CHAÎNE ${run.chain}`, r.w / 2, 72)
+    ctx.fillText(`CHAÎNE ${run.chain} · MÊME COULEUR`, r.w / 2, 72)
     ctx.textAlign = 'left'
   }
 

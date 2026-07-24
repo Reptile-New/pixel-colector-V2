@@ -248,6 +248,7 @@ export class App implements AppApi {
     const p = this.profile
     const s = run.stats
 
+    const previousBest = p.bestScore
     touchStreak(p)
     p.totalRuns += 1
     p.lifetimeCollected += s.collected
@@ -281,7 +282,7 @@ export class App implements AppApi {
     }
 
     p.runsSinceAd += 1
-    const isRecord = s.score > 0 && s.score >= p.bestScore
+    const isRecord = s.score > 0 && s.score > previousBest
     saveProfileNow(p)
 
     return { stats: { ...s }, bits, newSpecimens, completedMissions: completed.length, isRecord, daily: s.daily }
@@ -291,6 +292,7 @@ export class App implements AppApi {
 
   /** Live unlock checks. Returns ids unlocked by this call. */
   private checkSpecimens(dt: number, force = false): number[] {
+    const silent = force
     this.specimenTimer -= dt
     if (!force && this.specimenTimer > 0) return []
     this.specimenTimer = 0.4
@@ -313,9 +315,11 @@ export class App implements AppApi {
       p.specimens.push(sp.id)
       p.bits += RARITY_BITS[sp.rarity]
       found.push(sp.id)
-      audio.specimen()
-      this.ui.toast(`SPÉCIMEN · ${sp.name} · +${RARITY_BITS[sp.rarity]} ⬡`, 'gold')
-      this.renderer.setFlash('#ffc247', 0.14)
+      if (!silent) {
+        audio.specimen()
+        this.ui.toast(`SPÉCIMEN · ${sp.name} · +${RARITY_BITS[sp.rarity]} ⬡`, 'gold')
+        this.renderer.setFlash('#ffc247', 0.14)
+      }
     }
     if (found.length) saveProfile(p)
     return found

@@ -33,12 +33,12 @@ interface MissionTemplate {
 const TEMPLATES: readonly MissionTemplate[] = [
   {
     kind: 'score', label: (t) => `Cumuler ${t.toLocaleString('fr-FR')} points`,
-    targets: [8000, 20000, 45000], reward: [150, 320, 700],
+    targets: [6000, 15000, 34000], reward: [150, 320, 700],
     value: (r) => r.score, cumulative: true,
   },
   {
     kind: 'collect', label: (t) => `Récolter ${t} pixels`,
-    targets: [180, 400, 800], reward: [140, 300, 640],
+    targets: [120, 260, 520], reward: [140, 300, 640],
     value: (r) => r.collected, cumulative: true,
   },
   {
@@ -48,7 +48,7 @@ const TEMPLATES: readonly MissionTemplate[] = [
   },
   {
     kind: 'chain', label: (t) => `Atteindre une chaîne de ${t}`,
-    targets: [12, 20, 30], reward: [170, 350, 760],
+    targets: [8, 12, 18], reward: [170, 350, 760],
     value: (r) => r.bestChain, cumulative: false,
   },
   {
@@ -58,12 +58,12 @@ const TEMPLATES: readonly MissionTemplate[] = [
   },
   {
     kind: 'bigBank', label: (t) => `Banquer ${t.toLocaleString('fr-FR')} en une fois`,
-    targets: [2500, 6000, 12000], reward: [180, 400, 850],
+    targets: [1500, 3500, 7000], reward: [180, 400, 850],
     value: (r) => r.bestBank, cumulative: false,
   },
   {
     kind: 'overclocks', label: (t) => `Déclencher ${t} overclocks`,
-    targets: [8, 18, 32], reward: [130, 280, 600],
+    targets: [4, 9, 16], reward: [130, 280, 600],
     value: (r) => r.overclocks, cumulative: true,
   },
   {

@@ -49,11 +49,11 @@ export const WAVE_DURATION = 20
  */
 export const buildWave = (index: number, rng: Rng): WaveSpec => {
   const i = Math.max(1, index)
-  const pixelTarget = Math.min(9 + Math.floor(i * 1.6), 30)
-  const hunters = i < 2 ? 0 : Math.min(1 + Math.floor((i - 2) / 1.7), 9)
-  const hunterSpeed = 78 + i * 9.5
+  const pixelTarget = Math.min(6 + Math.floor(i * 0.85), 16)
+  const hunters = i < 2 ? 0 : Math.min(1 + Math.floor((i - 1) / 1.3), 12)
+  const hunterSpeed = 95 + i * 14
   // Wave 1 is corruption-free: the first 20 seconds must be a safe, wordless tutorial.
-  const corruptionTarget = i < 2 ? 0 : Math.min((i - 1) * 0.035, 0.44)
+  const corruptionTarget = i < 2 ? 0 : Math.min((i - 1) * 0.045, 0.5)
 
   let modifier: ModifierId = 'none'
   let lockedHue = 0

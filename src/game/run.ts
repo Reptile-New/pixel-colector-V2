@@ -71,7 +71,7 @@ export class Run {
   shards = 3
   maxShards = 3
   invuln = 0
-  magnet = 62
+  magnet = 46
   aura = 0
 
   // Economy
@@ -126,7 +126,7 @@ export class Run {
 
     this.maxShards = 3 + mods.extraShards
     this.shards = this.maxShards
-    this.magnet = 62 + mods.magnetBonus
+    this.magnet = 46 + mods.magnetBonus
     this.chainMax = 2.5 + mods.chainTimeBonus
 
     this.layout()
@@ -349,7 +349,7 @@ export class Run {
   /** Time allowed between two collects. Tightens with the chain so a long chain
    *  is a sprint, not a formality — and so chain milestones stay meaningful. */
   get chainWindow(): number {
-    return Math.max(0.85, this.chainMax - this.chain * 0.045)
+    return Math.max(1, this.chainMax - this.chain * 0.06)
   }
 
   private updateChain(dt: number): void {
@@ -366,7 +366,7 @@ export class Run {
   private updatePixels(dt: number): void {
     const alive = this.pixels.reduce((n, p) => n + (p.alive ? 1 : 0), 0)
     this.spawnAcc += dt
-    const spawnRate = this.overclock > 0 ? 0.05 : 0.12
+    const spawnRate = this.overclock > 0 ? 0.1 : 0.34
     if (alive < this.pixelTarget && this.spawnAcc > spawnRate) {
       this.spawnAcc = 0
       this.spawnPixel()
@@ -413,13 +413,17 @@ export class Run {
       return
     }
 
-    this.chain += 1
+    // The chain IS the multiplier: it only grows on a repeated colour, so it is
+    // naturally self-limiting and rewards *routing*, not just hoovering.
+    if (p.hue === this.lastHue) this.chain = Math.min(this.chain + 1, 40)
+    else this.chain = 1
+    this.mult = this.chain
     this.chainTimer = this.chainWindow
-    if (p.hue === this.lastHue) this.mult = Math.min(this.mult + 1, 30)
-    else this.mult = 1
     this.lastHue = p.hue
 
-    let value = 10 * (1 + this.chain * 0.05)
+    // Bounded flow bonus. The real scaling lives in the bank multiplier, so a
+    // long run can never turn into runaway exponential scoring.
+    let value = 12 * (1 + Math.min(this.chain, 30) * 0.02)
     if (p.golden) value *= 5
     if (this.overclock > 0) value *= 2
     if (this.wave.modifier === 'fragile') value *= 2
@@ -427,7 +431,7 @@ export class Run {
     value = Math.round(value)
 
     this.buffer += value
-    this.charge = Math.min(this.charge + (0.022 + this.chain * 0.0016) * (1 + this.mods.overclockRate), 1)
+    this.charge = Math.min(this.charge + (0.013 + this.chain * 0.002) * (1 + this.mods.overclockRate), 1)
 
     this.stats.collected += 1
     this.stats.hueCounts[p.hue] += 1
@@ -436,7 +440,7 @@ export class Run {
 
     audio.collect(hue.note, this.chain)
     this.particles.burst(p.x, p.y, p.golden ? COLORS.vault : hue.core, p.golden ? 14 : 7, p.golden ? 260 : 170, p.golden ? 5 : 3.5)
-    if (this.mult >= 3) this.particles.popup(p.x, p.y - 16, `×${this.mult}`, hue.core, 13 + Math.min(this.mult, 12))
+    if (this.mult >= 2) this.particles.popup(p.x, p.y - 16, `×${this.mult}`, hue.core, 13 + Math.min(this.mult, 12))
     if (p.golden) {
       this.particles.ring(p.x, p.y, COLORS.vault, 52, 0.45)
       this.renderer.punchZoom(0.008)
@@ -476,7 +480,7 @@ export class Run {
 
       if (this.rng.chance(0.35)) this.particles.streak(h.x, h.y, -h.vx * 0.3, -h.vy * 0.3, COLORS.hunter, 0.18, 2)
 
-      const near = d < 46
+      const near = d < 58
       if (near && h.near <= 0 && this.invuln <= 0) {
         h.near = 1.4
         this.stats.closeCalls += 1
