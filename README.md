@@ -42,6 +42,50 @@ Manette supportée (stick gauche + bouton A).
 3. Ramasser la **même couleur** d'affilée fait monter le **multiplicateur**, qui
    s'applique au dépôt. Être touché fait tout perdre.
 
+## Le partager à des gens (sans qu'ils installent quoi que ce soit)
+
+Le jeu est une **application web** : elle tourne dans le navigateur d'un iPhone,
+d'un Android, d'un PC ou d'un Mac. Rien à installer pour jouer — un lien suffit.
+
+### Mettre le lien en ligne, une fois pour toutes
+
+Le dépôt contient déjà le workflow qui construit et publie le jeu à chaque `push`
+(`.github/workflows/deploy.yml`). Il reste deux réglages à faire sur GitHub, une
+seule fois :
+
+1. Le dépôt doit être **public** (GitHub Pages est gratuit sur les dépôts publics) :
+   *Settings → General → Danger Zone → Change visibility*.
+2. *Settings → **Pages** → Source :* choisir **GitHub Actions**.
+
+Le lien à envoyer devient alors :
+
+```
+https://<ton-compte>.github.io/<nom-du-depot>/
+```
+
+Chaque `push` sur `main` (ou sur une branche `claude/**`) republie le jeu tout seul.
+Si le déploiement est refusé depuis une branche de travail, c'est la règle de
+branche de l'environnement `github-pages` : fusionner dans `main` la lève.
+
+### Installable comme une vraie app
+
+Le jeu est une PWA : icône, plein écran, et **jouable hors ligne** après la
+première visite (service worker). Depuis le lien :
+
+- **Android / Chrome** — un bouton « Ajouter à l'écran d'accueil » apparaît dans le menu du jeu.
+- **iPhone / Safari** — bouton ⬆︎ Partager → « Sur l'écran d'accueil ». (iOS n'expose
+  aucune API d'installation : le jeu affiche donc la marche à suivre au lieu de promettre un bouton.)
+
+Une fois posé sur l'écran d'accueil, c'est indiscernable d'une application native :
+icône, plein écran, pas de barre d'adresse.
+
+### Sans rien mettre en ligne
+
+`npm run build:single` produit `dist-single/pixel-collector.html` : **un seul
+fichier de 80 ko**, à ouvrir d'un double-clic, sans serveur ni connexion.
+Pratique pour tester ou pour l'envoyer à quelqu'un sur ordinateur — beaucoup moins
+sur mobile, où ouvrir une pièce jointe HTML n'est pas évident.
+
 ## Architecture
 
 ```

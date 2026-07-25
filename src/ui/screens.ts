@@ -38,6 +38,8 @@ export interface AppApi {
   setSetting(key: 'muted' | 'music' | 'reducedFx' | 'screenShake', value: boolean): void
   resetProgress(): void
   toast(msg: string, kind?: 'info' | 'gold' | 'danger'): void
+  canInstall: boolean
+  install(): void
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR')
@@ -81,6 +83,7 @@ export class Ui {
       case 'daily': a.start(true); break
       case 'go': this.show(arg as ScreenId); break
       case 'menu': a.quitToMenu(); break
+      case 'install': a.install(); break
       case 'resume': a.resume(); break
       case 'retry': a.retry(); break
       case 'revive': a.revive(); break
@@ -198,6 +201,8 @@ export class Ui {
         <div class="chip">CHAÎNE MAX <b>${p.bestChain}</b></div>
         <div class="chip">RUNS <b>${p.totalRuns}</b></div>
       </div>
+
+      ${this.app.canInstall ? '<div class="stack" style="margin-top:12px"><button data-act="install">⬇ AJOUTER À L\'ÉCRAN D\'ACCUEIL</button></div>' : ''}
 
       ${p.missions.length ? `<div class="panel" style="margin-top:14px"><h2>MISSIONS DU JOUR</h2>${missions}</div>` : ''}
       <div class="footnote" style="text-align:center;max-width:420px">

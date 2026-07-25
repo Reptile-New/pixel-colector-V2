@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4173",
     "typecheck": "tsc --noEmit",
-    "build:single": "vite build --config vite.single.config.ts && node scripts/bundle-single.mjs"
+    "build:single": "vite build --config vite.single.config.ts && node scripts/bundle-single.mjs",
+    "icons": "node scripts/make-icons.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

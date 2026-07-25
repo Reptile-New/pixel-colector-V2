@@ -2,6 +2,7 @@ import { audio } from '../audio/audio'
 import { Input } from '../core/input'
 import { clamp } from '../core/math'
 import { hashSeed, randomSeed } from '../core/rng'
+import { InstallPrompt } from '../meta/install'
 import { applyRunToMissions, rollMissions } from '../meta/missions'
 import {
   type Profile,
@@ -42,6 +43,7 @@ export class App implements AppApi {
   private particles: Particles
   private ui: Ui
   private money: Monetization
+  private installer = new InstallPrompt()
 
   private run: Run | null = null
   private state: State = 'menu'
@@ -62,6 +64,12 @@ export class App implements AppApi {
 
     this.rollDailyContent()
     this.applySettings()
+
+    // The install CTA can become available at any moment: re-render the menu
+    // when it does, rather than making the player go back and forth.
+    this.installer.subscribe(() => {
+      if (this.state === 'menu') this.ui.show('menu')
+    })
 
     // Audio must be created inside a user gesture; the first tap anywhere does it.
     const unlock = () => {
@@ -475,10 +483,26 @@ export class App implements AppApi {
     this.profile = loadProfile()
     this.rollDailyContent()
     this.applySettings()
+
+    // The install CTA can become available at any moment: re-render the menu
+    // when it does, rather than making the player go back and forth.
+    this.installer.subscribe(() => {
+      if (this.state === 'menu') this.ui.show('menu')
+    })
   }
 
   toast(msg: string, kind: 'info' | 'gold' | 'danger' = 'info'): void {
     this.ui.toast(msg, kind)
+  }
+
+  get canInstall(): boolean {
+    return this.installer.canOffer
+  }
+
+  install(): void {
+    void this.installer.run().then((message) => {
+      if (message) this.ui.toast(message, 'gold')
+    })
   }
 
 }
