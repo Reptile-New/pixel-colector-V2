@@ -36,6 +36,17 @@ export interface TutorialStep {
   readonly done?: (run: Run, elapsed: number, ctx: TutorialContext) => boolean
   /** Label of the manual button when there is no `done`. */
   readonly button?: string
+  /**
+   * Short objective shown while the player acts.
+   *
+   * Action steps hide the big panel entirely: asking someone to find five
+   * pixels of one colour while a text box covers the board is asking the
+   * impossible. The full explanation belongs to the frozen steps, where the
+   * game is paused and hiding the arena costs nothing.
+   */
+  readonly goal?: string
+  /** Live progress for a counting objective, e.g. "3/5". */
+  readonly progressText?: (run: Run, elapsed: number, ctx: TutorialContext) => string
 }
 
 export interface TutorialContext {
@@ -53,6 +64,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     focus: 'player',
     freeze: false,
     done: (_run, _t, ctx) => ctx.moved > 260,
+    goal: 'GLISSE TON DOIGT POUR TE DÉPLACER',
   },
   {
     id: 'collect',
@@ -60,6 +72,8 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     focus: 'pixels',
     freeze: false,
     done: (run, _t, ctx) => run.stats.collected - ctx.collectedAtStepStart >= 4,
+    goal: 'RAMASSE DES PIXELS',
+    progressText: (run, _t, ctx) => Math.min(run.stats.collected - ctx.collectedAtStepStart, 4) + "/4",
   },
   {
     id: 'buffer',
@@ -74,6 +88,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     focus: 'vault',
     freeze: false,
     done: (run, _t, ctx) => run.stats.banks > ctx.banksAtStepStart,
+    goal: 'VA TOUCHER LE VAULT DORÉ ▣',
   },
   {
     id: 'score',
@@ -88,6 +103,8 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     focus: 'pixels',
     freeze: false,
     done: (run) => run.chain >= 3,
+    goal: '3 PIXELS DE LA MÊME COULEUR',
+    progressText: (run) => Math.min(run.chain, 3) + "/3",
   },
   {
     id: 'mult',
@@ -102,11 +119,13 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     focus: 'pixels',
     freeze: false,
     done: (run) => run.chain >= 5,
+    goal: '5 PIXELS DE LA MÊME COULEUR',
+    progressText: (run) => Math.min(run.chain, 5) + "/5",
   },
   {
     id: 'greed',
-    text: 'Voilà tout le jeu : <b>continuer</b> pour empiler plus gros,<br>ou <b>banquer</b> avant de tout perdre.',
-    focus: null,
+    text: 'Regarde le <b>DÉPÔT ×</b> en haut à droite : plus ton buffer grossit, <b>plus le vault paie</b>.<br>Déposer par petits bouts ne rapporte presque rien. Attendre rapporte gros — mais tu peux tout perdre.',
+    focus: 'buffer',
     freeze: true,
     button: 'ET LE DANGER ?',
   },
@@ -119,6 +138,8 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
       run.allowHunters = true
       run.spawnOneHunter()
     },
+    goal: 'ESQUIVE LE TRAQUEUR',
+    progressText: (_run, elapsed) => `${Math.max(0, Math.ceil(9 - elapsed))} s`,
     done: (_run, elapsed) => elapsed > 9,
   },
   {
@@ -146,6 +167,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     freeze: false,
     enter: (run) => run.fillOverclock(),
     done: (run, _t, ctx) => run.stats.overclocks > ctx.overclocksAtStepStart,
+    goal: 'APPUIE SUR LA BARRE DU BAS',
   },
   {
     id: 'end',
@@ -240,6 +262,14 @@ export class Tutorial {
     run.allowHunters = true
     run.allowCorruption = true
     run.freezeWaves = false
+  }
+
+  /** Objective line for the current step, progress included. */
+  goalLine(run: Run): string | null {
+    const step = this.step
+    if (!step.goal) return null
+    const p = step.progressText?.(run, this.stepTime, this.ctx)
+    return p ? `${step.goal}  ${p}` : step.goal
   }
 
   get progress(): { current: number; total: number } {

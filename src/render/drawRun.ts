@@ -21,9 +21,9 @@ export const hudZones = (r: Renderer): Record<string, { x: number; y: number; w:
   return {
     score: { x: PAD - 6, y: T + 20, w: column + 12, h: 50 },
     buffer: { x: r.w - PAD - column - 6, y: T + 18, w: column + 12, h: 50 },
-    mult: { x: r.w - PAD - 118, y: T + 48, w: 124, h: 26 },
+    mult: { x: r.w - PAD - 124, y: T + 48, w: 130, h: 36 },
     shards: { x: PAD - 6, y: T + 70, w: 92, h: 28 },
-    wave: { x: r.w - PAD - column - 6, y: T + 74, w: column + 12, h: 34 },
+    wave: { x: r.w - PAD - column - 6, y: T + 84, w: column + 12, h: 34 },
     overclock: { x: (r.w - meter) / 2 - 10, y: r.h - B - 66, w: meter + 20, h: 32 },
   }
 }
@@ -40,6 +40,7 @@ export const drawRun = (
   skin: Skin,
   t: number,
   highlight: Highlight = null,
+  banner: string | null = null,
 ): void => {
   drawArena(ctx, run, t)
   drawCorruption(ctx, run, t)
@@ -51,7 +52,33 @@ export const drawRun = (
   run.particles.draw(ctx)
   if (run.wave.modifier === 'blackout') drawBlackout(ctx, run, r)
   drawHud(ctx, run, r, t)
+  if (banner) drawBanner(ctx, r, banner, t)
   if (highlight) drawHighlight(ctx, r, highlight, t)
+}
+
+/**
+ * Objectif en cours, dessiné dans la bande libre entre le bas de l'arène et la
+ * jauge d'overclock. Volontairement hors du terrain : demander de trouver cinq
+ * pixels d'une couleur pendant qu'un panneau couvre le plateau, c'est demander
+ * l'impossible.
+ */
+const drawBanner = (ctx: CanvasRenderingContext2D, r: Renderer, text: string, t: number): void => {
+  // La bande libre va du bas de l'arène (h-88) au libellé de l'overclock
+  // (h-54) : 34 px. Le bandeau s'y loge sans mordre ni sur l'un ni sur l'autre.
+  const y = r.h - r.safeBottom - 73
+  ctx.save()
+  ctx.font = `700 12px ${MONO}`
+  ctx.textAlign = 'center'
+  const w = Math.min(r.w - 24, ctx.measureText(text).width + 26)
+  const x = r.w / 2 - w / 2
+  ctx.fillStyle = 'rgba(9,10,20,0.9)'
+  ctx.fillRect(x, y - 14, w, 21)
+  ctx.strokeStyle = rgba(HUES[0].core, 0.35 + 0.25 * Math.sin(t * 3.5))
+  ctx.lineWidth = 1
+  ctx.strokeRect(x + 0.5, y - 13.5, w - 1, 20)
+  ctx.fillStyle = HUES[0].core
+  ctx.fillText(text, r.w / 2, y)
+  ctx.restore()
 }
 
 /** Pulsing marker used by the tutorial. Drawn last so nothing hides it. */
@@ -397,34 +424,42 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
     ctx.fillStyle = rgba(COLORS.vault, 0.85 + heat * 0.15)
     ctx.fillText(bufText, right + wob, T + 46)
 
-    // "EN RISQUE ×27" on one baseline, the multiplier in its own colour: measure
-    // the multiplier first so the label can be shifted left by exactly its width.
-    ctx.font = `700 12px ${MONO}`
-    const multText = run.mult > 1 ? `×${run.mult}` : ''
-    const multWidth = multText ? ctx.measureText(` ${multText}`).width : 0
-    if (multText) {
-      ctx.fillStyle = HUES[Math.max(run.lastHue, 0)].core
-      ctx.fillText(multText, right, T + 60)
+    // Ce que vaudra ce buffer une fois déposé. C'est la seule raison de ne pas
+    // banquer tout de suite : il faut donc le voir grimper en temps réel.
+    const deposit = run.depositMultiplier
+    ctx.font = `700 13px ${MONO}`
+    const depText = deposit > 1.02 ? `×${deposit.toFixed(1)}` : ''
+    const depWidth = depText ? ctx.measureText(` ${depText}`).width : 0
+    if (depText) {
+      ctx.fillStyle = rgba(COLORS.vault, 0.7 + Math.min((deposit - 1) / 1.5, 1) * 0.3)
+      ctx.fillText(depText, right, T + 60)
     }
     ctx.font = `700 10px ${MONO}`
     ctx.fillStyle = rgba(COLORS.vaultGlow, 0.55 + heat * 0.45)
-    ctx.fillText('EN RISQUE', right - multWidth, T + 60)
+    ctx.fillText('DÉPÔT', right - depWidth, T + 60)
   }
 
   // Chain timer: how long the multiplier has left, drawn under what it multiplies.
   if (run.chain > 0) {
-    const w = Math.min(126, column)
-    const x = right - w
+    const hue = HUES[Math.max(run.lastHue, 0)]
+    ctx.font = `700 11px ${MONO}`
+    const label = `×${run.chain}`
+    const labelW = ctx.measureText(label).width + 5
+    ctx.fillStyle = hue.core
+    ctx.fillText(label, right, T + 78)
+
+    const w = Math.min(112, column) - labelW
+    const x = right - labelW - w
     const p = clamp(run.chainTimer / run.chainWindow, 0, 1)
     ctx.fillStyle = 'rgba(255,255,255,0.10)'
-    ctx.fillRect(x, T + 66, w, 3)
-    ctx.fillStyle = p < 0.3 ? COLORS.corrupt : HUES[Math.max(run.lastHue, 0)].core
-    ctx.fillRect(x + w * (1 - p), T + 66, w * p, 3)
+    ctx.fillRect(x, T + 74, w, 3)
+    ctx.fillStyle = p < 0.3 ? COLORS.corrupt : hue.core
+    ctx.fillRect(x + w * (1 - p), T + 74, w * p, 3)
   }
 
   ctx.font = `700 14px ${MONO}`
   ctx.fillStyle = COLORS.text
-  ctx.fillText(`VAGUE ${run.waveIndex}`, right, T + 86)
+  ctx.fillText(`VAGUE ${run.waveIndex}`, right, T + 96)
 
   const mod = modifierById(run.wave.modifier)
   if (mod) {
@@ -437,7 +472,7 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
       ctx.font = `700 ${size}px ${MONO}`
     }
     ctx.fillStyle = mod.color
-    ctx.fillText(mod.name, right, T + 99)
+    ctx.fillText(mod.name, right, T + 109)
   }
 
   ctx.textAlign = 'left'

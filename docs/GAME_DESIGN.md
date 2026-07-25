@@ -57,12 +57,37 @@ router proprement rapporte **17× plus** que ramasser au hasard, la « pêche »
 ne rapporte plus rien de spécial, et le joueur *voit* le lien de cause à effet à
 chaque ramassage au lieu de devoir le déduire.
 
+### Le bonus de dépôt : pourquoi attendre
+
+Déplacer le multiplicateur vers la collecte a corrigé la triche… et cassé la
+tension. Un testeur l'a vu immédiatement : *« si j'attrape deux pixels et que je
+banque, deux fois, c'est pareil que d'en attraper quatre et de banquer une fois.
+Donc je ne prends jamais de risque. »* Exact, et rédhibitoire — la boucle
+press-your-luck ne tenait plus debout.
+
+Le vault paie donc un **bonus qui monte avec la taille du dépôt** :
+
+    dépôt = buffer × (1 + min(buffer / 2000 , 1.5))     plafonné à ×2,5
+
+Sur 20 pixels à la chaîne 5, mesuré en jeu : **1 050** en banquant par deux,
+**1 500** en gardant tout. Attendre vaut +43 %.
+
+Et c'est intrichable, contrairement au multiplicateur au dépôt : le bonus ne
+dépend que de la taille du buffer, qu'on ne peut construire qu'en gardant
+réellement les points sur soi — pendant que les traqueurs accélèrent.
+
+Les deux compétences sont désormais orthogonales : **le tracé** (enchaîner les
+couleurs, qui enrichit chaque pixel) et **le sang-froid** (garder, qui enrichit
+le dépôt).
+
 ### L'aimant n'attire que ta couleur
 
 Corollaire indispensable : tant que l'aimant aspirait tout, viser une couleur était
 impossible — on ne pouvait pas passer à côté d'un pixel sans l'avaler, et la chaîne
 semblait subie plutôt que choisie. L'aimant n'attire désormais **que la couleur de la
-chaîne en cours**. Les autres exigent un contact réel. L'outil qui sabotait la
+chaîne en cours**, et de bien plus loin qu'avant : c'est ce qui rend
+l'enchaînement jouable au doigt plutôt que pénible. Les autres couleurs exigent
+un contact réel. L'outil qui sabotait la
 mécanique principale la sert maintenant.
 
 ### L'Overclock (expression de skill)

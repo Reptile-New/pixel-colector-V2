@@ -179,7 +179,7 @@ export class Ui {
     }
 
     this.current = id
-    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto').forEach((n) => n.remove())
+    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto, .tuto-skip-float').forEach((n) => n.remove())
     if (id === 'none') return
 
     const builders: Record<Exclude<ScreenId, 'none'>, () => HTMLElement> = {
@@ -214,7 +214,7 @@ export class Ui {
    * replaced it, and it was overlapping the overclock label at the bottom.
    */
   showRunChrome(_hint: string | null = null): void {
-    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto').forEach((n) => n.remove())
+    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto, .tuto-skip-float').forEach((n) => n.remove())
     this.current = 'none'
     this.root.appendChild(el('<button class="pause-btn ghost" data-act="go" data-arg="pause">PAUSE</button>'))
   }
@@ -224,13 +224,25 @@ export class Ui {
    * the player has to be able to drag *through* the panel to move, otherwise the
    * very first instruction would be impossible to follow.
    */
+  /** Chrome minimal pendant une étape d'action : rien qui masque le terrain. */
+  showTutorialSkip(): void {
+    this.root.querySelectorAll('.screen, .hint, .tuto').forEach((n) => n.remove())
+    this.current = 'none'
+    if (!this.root.querySelector('.pause-btn')) {
+      this.root.appendChild(el('<button class="pause-btn ghost" data-act="go" data-arg="pause">PAUSE</button>'))
+    }
+    if (!this.root.querySelector('.tuto-skip-float')) {
+      this.root.appendChild(el('<button class="tuto-skip-float" data-act="tutoSkip">PASSER LE TUTO</button>'))
+    }
+  }
+
   showTutorial(
     text: string,
     button: string | null,
     progress: { current: number; total: number },
     low = false,
   ): void {
-    this.root.querySelectorAll('.screen, .hint, .tuto').forEach((n) => n.remove())
+    this.root.querySelectorAll('.screen, .hint, .tuto, .tuto-skip-float').forEach((n) => n.remove())
     this.current = 'none'
     if (!this.root.querySelector('.pause-btn')) {
       this.root.appendChild(el('<button class="pause-btn ghost" data-act="go" data-arg="pause">PAUSE</button>'))

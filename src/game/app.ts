@@ -24,7 +24,7 @@ import {
   type Sku,
 } from '../monetize/monetization'
 import { dayNumber, shareChallenge } from '../meta/share'
-import { type Highlight, drawRun } from '../render/drawRun'
+import { type Highlight, drawRun, hudZones } from '../render/drawRun'
 import { Particles } from '../render/particles'
 import { SKINS, skinById } from '../render/palette'
 import { Renderer } from '../render/renderer'
@@ -100,9 +100,15 @@ export class App implements AppApi {
     // Overclock: space bar, right-click, or a tap on the meter strip (mobile).
     canvas.addEventListener('pointerdown', (e) => {
       if (this.state !== 'running' || !this.run) return
-      const r = canvas.getBoundingClientRect()
-      const y = e.clientY - r.top
-      if (e.button === 2 || y > this.renderer.h - 74) {
+      const rect = canvas.getBoundingClientRect()
+      const y = e.clientY - rect.top
+      // The hit zone is derived from the *drawn* position of the meter. It used
+      // to be a hard-coded `h - 74`, which ignored the home indicator: on a
+      // phone with a bottom inset the bar is drawn higher than the zone that
+      // listened, so tapping the visible bar did nothing at all.
+      const zone = hudZones(this.renderer).overclock
+      const reachable = y > zone.y - 14 // generous: it is aimed at with a thumb
+      if (e.button === 2 || reachable) {
         if (this.run.triggerOverclock()) e.preventDefault()
       }
     })
@@ -180,7 +186,15 @@ export class App implements AppApi {
 
     const ctx = this.renderer.begin()
     if (this.run) {
-      drawRun(ctx, this.run, this.renderer, skinById(this.profile.skin), this.clock, this.highlight())
+      drawRun(
+        ctx,
+        this.run,
+        this.renderer,
+        skinById(this.profile.skin),
+        this.clock,
+        this.highlight(),
+        this.tutorial && !this.tutorial.finished ? this.tutorial.goalLine(this.run) : null,
+      )
     } else {
       this.drawIdleBackdrop(ctx)
     }
@@ -300,16 +314,19 @@ export class App implements AppApi {
   private refreshTutorialPanel(): void {
     if (!this.tutorial || this.tutorial.finished) return
     const step = this.tutorial.step
-    // "Go touch the vault" is useless if the vault is hidden behind the panel:
-    // when the thing being pointed at sits in the panel's band, move the panel.
+
+    // Read, then do — never both at once. The explanation panel only appears on
+    // frozen steps, where the game is paused and covering the arena costs
+    // nothing. While the player acts, the instruction lives in a one-line
+    // banner drawn under the arena, so the board stays fully visible.
+    if (!this.tutorial.manual) {
+      this.ui.showTutorialSkip()
+      return
+    }
+
     const focus = this.highlight()
     const low = focus?.kind === 'world' && focus.y < this.renderer.h * 0.5
-    this.ui.showTutorial(
-      step.text,
-      this.tutorial.manual ? (step.button ?? 'SUIVANT') : null,
-      this.tutorial.progress,
-      low,
-    )
+    this.ui.showTutorial(step.text, step.button ?? 'SUIVANT', this.tutorial.progress, low)
   }
 
   /** What the tutorial is currently pointing at. */

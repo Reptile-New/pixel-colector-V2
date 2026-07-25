@@ -481,3 +481,16 @@ button.small { padding: 9px 12px; font-size: 11px; letter-spacing: 0.09em; }
   top: auto;
   bottom: calc(84px + env(safe-area-inset-bottom));
 }
+
+/* Bouton d'échappement pendant une étape d'action, quand le panneau est masqué. */
+.tuto-skip-float {
+  position: absolute;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  right: 12px;
+  padding: 7px 12px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  opacity: 0.4;
+  background: transparent;
+}
+.tuto-skip-float:hover { opacity: 1; background: rgba(255, 255, 255, 0.06); }

@@ -12,6 +12,10 @@ import { WAVE_DURATION, type WaveSpec, buildWave } from './waves'
 export const CELL = 38
 /** Base worth of a pixel, before the chain multiplies it. */
 export const PIXEL_VALUE = 10
+/** Taille de buffer qui donne le bonus de dépôt maximal. */
+export const DEPOSIT_SCALE = 2000
+/** Bonus de dépôt maximal (×2,5 au total). */
+export const DEPOSIT_MAX_BONUS = 1.5
 /** Beyond this the chain stops raising a pixel's value — but the counter keeps
  *  climbing, because specimens and missions ask for chains far longer than this. */
 export const VALUE_CAP = 14
@@ -158,7 +162,7 @@ export class Run {
     const pad = 14
     this.x0 = pad
     this.x1 = r.w - pad
-    this.y0 = 104 + r.safeTop
+    this.y0 = 114 + r.safeTop
     this.y1 = r.h - 88 - r.safeBottom
     const cols = Math.max(4, Math.ceil((this.x1 - this.x0) / CELL))
     const rows = Math.max(4, Math.ceil((this.y1 - this.y0) / CELL))
@@ -425,6 +429,19 @@ export class Run {
     }
   }
 
+  /**
+   * Ce que vaudra le buffer une fois déposé.
+   *
+   * Sans lui, déposer deux pixels dix fois rapportait exactement autant que
+   * déposer vingt pixels une fois : garder son buffer n'apportait rien, donc la
+   * bonne stratégie était de sécuriser en permanence et le jeu perdait sa
+   * tension. Le bonus monte avec la taille du dépôt — impossible à simuler au
+   * dernier moment, puisqu'il faut avoir réellement gardé les points sur soi.
+   */
+  get depositMultiplier(): number {
+    return 1 + Math.min(this.buffer / DEPOSIT_SCALE, DEPOSIT_MAX_BONUS)
+  }
+
   /** Time allowed between two collects. Tightens with the chain so a long chain
    *  is a sprint, not a formality — and so chain milestones stay meaningful. */
   get chainWindow(): number {
@@ -464,12 +481,17 @@ export class Run {
       // everything made deliberate colour play impossible: you could not walk
       // past a pixel without swallowing it, so the chain felt random rather than
       // chosen. Off-colour pixels now require actual contact.
-      const attracts = this.overclock > 0 || this.chain === 0 || p.hue === this.lastHue
+      // La couleur en cours est attirée de plus loin que les autres : c'est ce
+      // qui rend l'enchaînement jouable au doigt plutôt que pénible.
+      const matches = this.chain === 0 || p.hue === this.lastHue
+      const attracts = this.overclock > 0 || matches
+      const reach = matches ? magnetR2 * 2.9 : magnetR2
 
-      if (attracts && d2 < magnetR2) {
+      if (attracts && d2 < reach) {
         const d = Math.sqrt(d2) || 1
         // Pull strength ramps as it gets closer: a satisfying "snap" instead of a drift.
-        const pull = (1 - d / magnetR) * (this.overclock > 0 ? 1500 : 780)
+        const span = Math.sqrt(reach)
+        const pull = (1 - d / span) * (this.overclock > 0 ? 1500 : 820)
         p.x += ((this.px - p.x) / d) * pull * dt
         p.y += ((this.py - p.y) / d) * pull * dt
         p.pulled = 1
@@ -667,9 +689,8 @@ export class Run {
       this.placeVault()
       return
     }
-    // Banking secures; it no longer multiplies. All the multiplication already
-    // happened, pixel by pixel, where the player could see it.
-    const amount = Math.round(this.buffer * (1 + this.mods.vaultBonus))
+    const deposit = this.depositMultiplier
+    const amount = Math.round(this.buffer * deposit * (1 + this.mods.vaultBonus))
     this.stats.score += amount
     this.stats.banks += 1
     this.stats.bestBank = Math.max(this.stats.bestBank, amount)
@@ -678,7 +699,13 @@ export class Run {
     audio.bank(magnitude)
     this.particles.ring(this.vx, this.vy, COLORS.vault, 90 + magnitude * 150, 0.55)
     this.particles.burst(this.vx, this.vy, COLORS.vault, 18 + Math.floor(magnitude * 26), 300, 5)
-    this.particles.popup(this.vx, this.vy - 34, `+${amount.toLocaleString('fr-FR')}`, COLORS.vault, 20 + magnitude * 20)
+    this.particles.popup(
+      this.vx,
+      this.vy - 34,
+      deposit > 1.05 ? `+${amount.toLocaleString('fr-FR')}  ×${deposit.toFixed(1)}` : `+${amount.toLocaleString('fr-FR')}`,
+      COLORS.vault,
+      20 + magnitude * 20,
+    )
     this.renderer.addShake(4 + magnitude * 12)
     this.renderer.punchZoom(0.02 + magnitude * 0.05)
     this.renderer.setFlash(COLORS.vaultGlow, 0.06 + magnitude * 0.16)
