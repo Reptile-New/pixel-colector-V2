@@ -49,23 +49,20 @@ d'un Android, d'un PC ou d'un Mac. Rien à installer pour jouer — un lien suff
 
 ### Mettre le lien en ligne, une fois pour toutes
 
-Le dépôt contient déjà le workflow qui construit et publie le jeu à chaque `push`
-(`.github/workflows/deploy.yml`). Il reste deux réglages à faire sur GitHub, une
-seule fois :
-
-1. Le dépôt doit être **public** (GitHub Pages est gratuit sur les dépôts publics) :
-   *Settings → General → Danger Zone → Change visibility*.
-2. *Settings → **Pages** → Source :* choisir **GitHub Actions**.
-
-Le lien à envoyer devient alors :
+Le jeu est publié automatiquement à chaque `push` sur `main`
+(`.github/workflows/deploy.yml`) :
 
 ```
-https://<ton-compte>.github.io/<nom-du-depot>/
+https://reptile-new.github.io/pixel-colector-V2/
 ```
 
-Chaque `push` sur `main` (ou sur une branche `claude/**`) republie le jeu tout seul.
-Si le déploiement est refusé depuis une branche de travail, c'est la règle de
-branche de l'environnement `github-pages` : fusionner dans `main` la lève.
+Le déploiement ne se déclenche que depuis `main`, parce que l'environnement
+`github-pages` n'autorise que la branche par défaut : le lancer depuis une branche
+de travail échouerait à tous les coups. Le travail en cours vit donc sur une branche
+dédiée et part en ligne à la fusion dans `main`.
+
+Prérequis, déjà en place ici : dépôt **public**, et *Settings → Pages → Source :
+GitHub Actions*.
 
 ### Installable comme une vraie app
 

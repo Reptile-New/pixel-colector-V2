@@ -1,8 +1,11 @@
 name: Déployer sur GitHub Pages
 
+# Uniquement depuis la branche par défaut : l'environnement `github-pages`
+# n'autorise qu'elle, un déclenchement sur une branche de travail échouerait
+# systématiquement et polluerait l'historique des exécutions.
 on:
   push:
-    branches: [main, master, 'claude/**']
+    branches: [main]
   workflow_dispatch:
 
 # Un seul déploiement à la fois ; on ne coupe pas celui qui est en cours.
