@@ -75,6 +75,9 @@ export class Ui {
   private current: ScreenId = 'none'
   private albumSelection = 0
   private shopTab: 'skins' | 'store' = 'skins'
+  /** Defilement memorise par ecran : acheter une amelioration reconstruit
+   *  l'ecran, et sans ca la liste sautait en haut a chaque achat. */
+  private scrollMemory = new Map<ScreenId, number>()
 
   constructor(root: HTMLElement, private app: AppApi) {
     this.root = root
@@ -100,7 +103,12 @@ export class Ui {
     switch (act) {
       case 'start': a.start(false); break
       case 'daily': a.start(true); break
-      case 'go': this.show(arg as ScreenId); break
+      case 'go':
+        // Entering a screen on purpose starts at the top; only in-place
+        // refreshes (a purchase, a toggle) keep the scroll position.
+        this.scrollMemory.delete(arg as ScreenId)
+        this.show(arg as ScreenId)
+        break
       case 'menu': a.quitToMenu(); break
       case 'install': a.install(); break
       case 'accept': a.acceptChallenge(); break
@@ -149,6 +157,13 @@ export class Ui {
   }
 
   show(id: ScreenId): void {
+    // Capture where the player was before tearing the screen down.
+    const previous = this.root.querySelector('.screen')
+    if (previous && this.current === id) {
+      const scroller = previous.querySelector('.scroll') ?? previous
+      this.scrollMemory.set(id, scroller.scrollTop)
+    }
+
     this.current = id
     this.root.querySelectorAll('.screen, .pause-btn, .hint').forEach((n) => n.remove())
     if (id === 'none') return
@@ -164,7 +179,18 @@ export class Ui {
       challenge: () => this.challenge(),
       rivals: () => this.rivals(),
     }
-    this.root.appendChild(builders[id]())
+    const screen = builders[id]()
+    this.root.appendChild(screen)
+
+    const restore = this.scrollMemory.get(id)
+    if (restore) {
+      const scroller = screen.querySelector('.scroll') ?? screen
+      // The element is in the DOM but not yet laid out; wait one frame so
+      // scrollHeight is real, otherwise the assignment is clamped to 0.
+      requestAnimationFrame(() => {
+        scroller.scrollTop = restore
+      })
+    }
   }
 
   /** In-run chrome: a discreet pause button plus contextual first-run hints. */
@@ -307,7 +333,9 @@ export class Ui {
       <div class="stack">
         <button class="primary" data-act="share">${d ? '↩ RENVOYER LE DÉFI' : '⚔ DÉFIER UN POTE'}</button>
         ${this.app.canRevive ? '<button class="gold" data-act="revive">▶ CONTINUER — REGARDER UNE PUB</button>' : ''}
-        <button class="gold" data-act="double" ${this.app.rewardedReady ? '' : 'disabled'}>×2 BITS — REGARDER UNE PUB</button>
+        <button class="gold" data-act="double" ${this.app.rewardedReady ? '' : 'disabled'}>
+          ${this.app.rewardedReady ? '×2 BITS — REGARDER UNE PUB' : 'BITS DÉJÀ DOUBLÉS'}
+        </button>
         <button data-act="retry">REJOUER</button>
         <div class="row">
           <button data-act="go" data-arg="album">ALBUM</button>

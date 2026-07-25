@@ -37,6 +37,8 @@ import { modifierById } from './waves'
 
 type State = 'menu' | 'running' | 'paused' | 'over'
 
+const fmtBits = (n: number) => Math.round(n).toLocaleString('fr-FR')
+
 export class App implements AppApi {
   profile: Profile
   lastResult: RunResult | null = null
@@ -65,6 +67,8 @@ export class App implements AppApi {
   private pendingInterstitial = false
   /** Progression déjà créditée pour la run en cours (voir `finalise`). */
   private credited = { score: 0, collected: 0, banks: 0, overclocks: 0, counted: false }
+  /** Le doublement de bits n'est offert qu'une fois par run. */
+  private bitsDoubled = false
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.profile = loadProfile()
@@ -247,6 +251,7 @@ export class App implements AppApi {
 
     this.particles.clear()
     this.credited = { score: 0, collected: 0, banks: 0, overclocks: 0, counted: false }
+    this.bitsDoubled = false
     this.run = new Run(seed, mods, this.renderer, this.particles, daily)
     this.state = 'running'
     this.usedRevive = false
@@ -476,20 +481,29 @@ export class App implements AppApi {
   }
 
   doubleBits(): void {
+    // One doubling per run, full stop. Without this guard each click added the
+    // already-doubled amount again, so the reward compounded without limit.
+    if (this.bitsDoubled) return
     const r = this.lastResult
     if (!r || !this.money.ads.isRewardedReady()) return
+    this.bitsDoubled = true
     void this.money.ads.showRewarded('doubleBits').then((ok) => {
-      if (!ok || !this.lastResult) return
-      this.profile.bits += this.lastResult.bits
+      if (!ok || !this.lastResult) {
+        this.bitsDoubled = false // ad dismissed: the offer stays available
+        this.ui.show('gameover')
+        return
+      }
+      const bonus = this.lastResult.bits
+      this.profile.bits += bonus
       this.lastResult = { ...this.lastResult, bits: this.lastResult.bits * 2 }
       saveProfileNow(this.profile)
-      this.ui.toast(`+${this.lastResult.bits / 2} ⬡ BONUS`, 'gold')
+      this.ui.toast(`+${fmtBits(bonus)} ⬡ BONUS`, 'gold')
       this.ui.show('gameover')
     })
   }
 
   get rewardedReady(): boolean {
-    return this.money.ads.isRewardedReady() && this.lastResult !== null
+    return this.money.ads.isRewardedReady() && this.lastResult !== null && !this.bitsDoubled
   }
 
   purchase(sku: Sku): void {

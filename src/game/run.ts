@@ -262,11 +262,61 @@ export class Run {
     h.wobble = this.rng.angle()
   }
 
+  /** Average corruption of a cell and its four neighbours. */
+  private areaCorruption(i: number): number {
+    const cx = i % this.cols
+    const cy = Math.floor(i / this.cols)
+    let sum = this.corrupt[i]
+    let n = 1
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const nx = cx + dx
+      const ny = cy + dy
+      if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue
+      sum += this.corrupt[ny * this.cols + nx]
+      n++
+    }
+    return sum / n
+  }
+
+  /**
+   * Places the vault on the cleanest ground available.
+   *
+   * The old version drew random spots and, after 24 misses, fell back to the
+   * arena centre with no corruption check at all — so on a corrupted arena the
+   * vault could land inside a hostile zone the player cannot enter without
+   * taking damage. With banking being the only way to convert score, that
+   * soft-locked the rest of the run.
+   *
+   * Now every cell is scored: clean ground dominates the choice and distance is
+   * only a preference. Whatever is picked, a small area around it is purged, so
+   * the vault is always physically enterable.
+   */
   private placeVault(initial = false): void {
-    const spot = this.freeSpot(initial ? 120 : 210) ?? { x: (this.x0 + this.x1) / 2, y: (this.y0 + this.y1) / 2 }
-    this.vx = spot.x
-    this.vy = spot.y
+    const diagonal = Math.hypot(this.x1 - this.x0, this.y1 - this.y0)
+    // On a small arena, demanding 210px away is impossible — scale the wish.
+    const wanted = Math.min(initial ? 120 : 210, diagonal * 0.42)
+
+    let best: { x: number; y: number; score: number } | null = null
+    for (let i = 0; i < this.corrupt.length; i++) {
+      const c = this.cellCenter(i)
+      if (c.x < this.x0 + this.vaultR || c.x > this.x1 - this.vaultR) continue
+      if (c.y < this.y0 + this.vaultR || c.y > this.y1 - this.vaultR) continue
+      const dist = Math.hypot(c.x - this.px, c.y - this.py)
+      // Corruption is weighted so heavily that a clean far cell always beats a
+      // dirty near one; the jitter keeps successive placements from repeating.
+      const score = this.areaCorruption(i) * 100 + Math.abs(dist - wanted) / 90 + this.rng.next() * 0.5
+      if (!best || score < best.score) best = { x: c.x, y: c.y, score }
+    }
+
+    this.vx = best ? best.x : (this.x0 + this.x1) / 2
+    this.vy = best ? best.y : (this.y0 + this.y1) / 2
     this.vaultPulse = 1
+    this.purge(this.vx, this.vy, CELL * 1.7)
   }
 
   // ───────────────────────── update ─────────────────────────
