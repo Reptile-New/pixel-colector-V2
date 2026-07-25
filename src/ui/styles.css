@@ -67,8 +67,10 @@ html, body {
    la couche capture les gestes — ce qui rendait la première consigne du
    tutoriel impossible à suivre. */
 #ui > #toasts,
-#ui > .tuto,
-#ui > 
+#ui > .tuto {
+  pointer-events: none;
+}
+
 /* ── Screens ────────────────────────────────────────────── */
 
 .screen {
@@ -89,6 +91,9 @@ html, body {
   animation: fade 0.22s ease;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Le joueur passe son temps à glisser horizontalement : on n'autorise que le
+     défilement vertical, pour ne pas déclencher un geste de navigation. */
+  touch-action: pan-y;
 }
 
 /* Centrage vertical par marges automatiques plutôt que justify-content: center.
@@ -223,7 +228,18 @@ button.small { padding: 9px 12px; font-size: 11px; letter-spacing: 0.09em; }
   padding: calc(12px + env(safe-area-inset-top)) 14px 12px;
   font-size: 11px;
   letter-spacing: 0.14em;
+  /* Un joueur à 1 263 572 bits faisait déborder la ligne : le compteur de
+     spécimens était comprimé puis passait à la ligne. Chaque élément garde
+     désormais sa place et tronque plutôt que de pousser ses voisins. */
+  white-space: nowrap;
+  overflow: hidden;
 }
+.topbar > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.topbar .bits { flex: 0 1 auto; }
 .topbar .spacer { flex: 1; }
 .topbar .bits { color: var(--gold); font-weight: 700; }
 

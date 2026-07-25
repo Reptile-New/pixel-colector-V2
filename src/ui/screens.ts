@@ -705,6 +705,46 @@ export class Ui {
     </div>`)
   }
 
+  /**
+   * Facts instead of guesses. Layout bugs reported from a phone I cannot
+   * reproduce on are unfixable without knowing what that phone's browser
+   * actually supports — this panel is meant to be screenshotted and sent back.
+   */
+  private diagnostics(): string {
+    const supports = (prop: string, value: string) => {
+      try {
+        return CSS.supports(prop, value) ? 'oui' : 'NON'
+      } catch {
+        return '?'
+      }
+    }
+    const probe = document.createElement('div')
+    probe.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top,0px)'
+    document.body.appendChild(probe)
+    const safeTop = probe.offsetHeight
+    probe.remove()
+
+    const rows: [string, string][] = [
+      ['ÉCRAN', `${window.innerWidth} × ${window.innerHeight} @${window.devicePixelRatio}x`],
+      ['ENCOCHE', `${safeTop} px`],
+      ['AFFICHAGE', window.matchMedia('(display-mode: standalone)').matches ? 'écran d\'accueil' : 'navigateur'],
+      ['inset', supports('inset', '0px')],
+      ['aspect-ratio', supports('aspect-ratio', '1')],
+      ['gap (flex)', supports('gap', '10px')],
+      ['backdrop-filter', supports('-webkit-backdrop-filter', 'blur(1px)')],
+      ['NAVIGATEUR', navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 92)],
+    ]
+    return `<div class="panel"><h2>INFOS TECHNIQUES</h2>
+      ${rows
+        .map(
+          ([k, v]) =>
+            `<div class="kv" style="align-items:flex-start"><span>${k}</span><span style="font-weight:400;font-size:10px;text-align:right;max-width:62%;word-break:break-word">${v}</span></div>`,
+        )
+        .join('')}
+      <div class="footnote" style="margin-top:8px">En cas de problème d'affichage, envoie une capture de ce panneau.</div>
+    </div>`
+  }
+
   private settings(): HTMLElement {
     const s = this.app.profile.settings
     const sw = (key: string, label: string, on: boolean) =>
@@ -715,11 +755,14 @@ export class Ui {
 
     return el(`<div class="screen">
       <h1 class="title" style="font-size:26px">OPTIONS</h1>
+      <div class="scroll">
       <div class="panel" style="margin-top:18px">
         ${sw('muted', 'SILENCE', s.muted)}
         ${sw('music', 'MUSIQUE', s.music)}
         ${sw('screenShake', 'SECOUSSE ÉCRAN', s.screenShake)}
         ${sw('reducedFx', 'EFFETS RÉDUITS', s.reducedFx)}
+      </div>
+      ${this.diagnostics()}
       </div>
       <div class="stack">
         <button data-act="menu">RETOUR</button>

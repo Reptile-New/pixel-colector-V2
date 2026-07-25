@@ -35,6 +35,24 @@ navigateur**, via Playwright. Chromium est préinstallé
 sous-dossier reproduit les conditions de GitHub Pages, là où les chemins absolus
 cassent.
 
-Les bugs trouvés jusqu'ici l'ont tous été de cette façon, jamais par lecture du
-code : textes qui se chevauchent, menu inatteignable en paysage, vault posé dans
-une zone inaccessible, récompense créditée mais invisible.
+```bash
+npm run build
+(cd dist && python3 -m http.server 4180)   # dans un sous-dossier nommé comme le dépôt
+npm run check:layout
+```
+
+`scripts/check-layout.mjs` passe les sept écrans sur six formats et vérifie quatre
+invariants : les couches informatives (toasts, panneau du tutoriel) n'ont jamais de
+fond ni ne capturent les gestes, l'écran couvre exactement la fenêtre, rien ne
+déborde horizontalement, aucun bouton ne sort de l'écran.
+
+Ce contrôle existe à cause d'un bug précis : une liste de sélecteurs CSS restée
+ouverte a fait hériter au conteneur des toasts **tout le style de l'écran de menu**
+— une couche opaque plein écran, en z-index 30, par-dessus le jeu. Le CSS restait
+valide, le typecheck passait, la build passait, et la moitié de l'écran était noire
+sur le téléphone d'un joueur.
+
+Les bugs trouvés jusqu'ici l'ont tous été en jouant, jamais par lecture du code :
+textes qui se chevauchent, menu inatteignable en paysage, vault posé dans une zone
+inaccessible, récompense créditée mais invisible, économie dont la stratégie
+optimale était de tricher, et cette couche noire.

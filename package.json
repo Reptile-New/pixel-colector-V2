@@ -10,7 +10,8 @@
     "preview": "vite preview --port 4173",
     "typecheck": "tsc --noEmit",
     "build:single": "vite build --config vite.single.config.ts && node scripts/bundle-single.mjs",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "check:layout": "node scripts/check-layout.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
