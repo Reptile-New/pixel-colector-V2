@@ -65,6 +65,7 @@ export interface AppApi {
   shareRun(): void
   playerName: string
   setName(name: string): void
+  triggerOverclock(): void
   startTutorial(): void
   tutorialNext(): void
   tutorialSkip(): void
@@ -123,6 +124,7 @@ export class Ui {
       case 'menu': a.quitToMenu(); break
       case 'install': a.install(); break
       case 'tuto': a.startTutorial(); break
+      case 'overclock': a.triggerOverclock(); break
       case 'tutoNext': a.tutorialNext(); break
       case 'tutoSkip': a.tutorialSkip(); break
       case 'accept': a.acceptChallenge(); break
@@ -179,7 +181,7 @@ export class Ui {
     }
 
     this.current = id
-    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto, .tuto-skip-float').forEach((n) => n.remove())
+    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto, .tuto-skip-float, .oc-btn').forEach((n) => n.remove())
     if (id === 'none') return
 
     const builders: Record<Exclude<ScreenId, 'none'>, () => HTMLElement> = {
@@ -214,7 +216,7 @@ export class Ui {
    * replaced it, and it was overlapping the overclock label at the bottom.
    */
   showRunChrome(_hint: string | null = null): void {
-    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto, .tuto-skip-float').forEach((n) => n.remove())
+    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto, .tuto-skip-float, .oc-btn').forEach((n) => n.remove())
     this.current = 'none'
     this.root.appendChild(el('<button class="pause-btn ghost" data-act="go" data-arg="pause">PAUSE</button>'))
   }
@@ -224,6 +226,25 @@ export class Ui {
    * the player has to be able to drag *through* the panel to move, otherwise the
    * very first instruction would be impossible to follow.
    */
+  /**
+   * Bouton d'overclock.
+   *
+   * La jauge était dessinée sur le canvas et écoutait les touchers par calcul de
+   * coordonnées. Trop d'inconnues sur un vrai téléphone — encoche, zone morte,
+   * autre couche par-dessus — et un joueur qui tape sans que rien ne se passe.
+   * Un vrai bouton reçoit le toucher quoi qu'il arrive, et dit en plus qu'il est
+   * cliquable, ce que la barre ne disait pas.
+   */
+  setOverclockReady(ready: boolean): void {
+    const existing = this.root.querySelector('.oc-btn')
+    if (ready === !!existing) return
+    if (!ready) {
+      existing?.remove()
+      return
+    }
+    this.root.appendChild(el('<button class="oc-btn" data-act="overclock">⚡ OVERCLOCK</button>'))
+  }
+
   /** Chrome minimal pendant une étape d'action : rien qui masque le terrain. */
   showTutorialSkip(): void {
     this.root.querySelectorAll('.screen, .hint, .tuto').forEach((n) => n.remove())
@@ -242,7 +263,7 @@ export class Ui {
     progress: { current: number; total: number },
     low = false,
   ): void {
-    this.root.querySelectorAll('.screen, .hint, .tuto, .tuto-skip-float').forEach((n) => n.remove())
+    this.root.querySelectorAll('.screen, .hint, .tuto, .tuto-skip-float, .oc-btn').forEach((n) => n.remove())
     this.current = 'none'
     if (!this.root.querySelector('.pause-btn')) {
       this.root.appendChild(el('<button class="pause-btn ghost" data-act="go" data-arg="pause">PAUSE</button>'))

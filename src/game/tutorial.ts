@@ -162,12 +162,12 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   },
   {
     id: 'overclock',
-    text: 'Ta barre du bas est pleine.<br>Appuie sur <b>ESPACE</b> ou <b>touche la barre</b> : ralenti, aimant, points doublés.',
+    text: 'Ton <b>overclock</b> est chargé : le bouton ⚡ est apparu en bas.<br>Appuie dessus (ou sur <b>ESPACE</b>) : ralenti, aimant, points doublés.',
     focus: 'overclock',
     freeze: false,
     enter: (run) => run.fillOverclock(),
     done: (run, _t, ctx) => run.stats.overclocks > ctx.overclocksAtStepStart,
-    goal: 'APPUIE SUR LA BARRE DU BAS',
+    goal: 'APPUIE SUR LE BOUTON ⚡ EN BAS',
   },
   {
     id: 'end',

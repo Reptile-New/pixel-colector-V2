@@ -181,6 +181,12 @@ export class App implements AppApi {
       if (this.run.dead) this.endRun()
     }
 
+    // Le bouton n'est créé/retiré que lorsque l'état change (setOverclockReady
+    // ignore les appels redondants) : pas de manipulation du DOM par image.
+    this.ui.setOverclockReady(
+      this.state === 'running' && !!this.run && this.run.charge >= 1 && this.run.overclock <= 0,
+    )
+
     this.particles.update(this.state === 'running' ? dt * (this.run?.timeScale ?? 1) : dt)
     this.renderer.update(dt)
 
@@ -279,6 +285,10 @@ export class App implements AppApi {
     this.canRevive = false
     this.specimenTimer = 0
     this.ui.showRunChrome(null)
+  }
+
+  triggerOverclock(): void {
+    this.run?.triggerOverclock()
   }
 
   /** Starts the guided run. Upgrades are neutralised so the script is predictable. */

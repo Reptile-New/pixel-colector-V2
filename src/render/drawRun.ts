@@ -63,9 +63,9 @@ export const drawRun = (
  * l'impossible.
  */
 const drawBanner = (ctx: CanvasRenderingContext2D, r: Renderer, text: string, t: number): void => {
-  // La bande libre va du bas de l'arène (h-88) au libellé de l'overclock
-  // (h-54) : 34 px. Le bandeau s'y loge sans mordre ni sur l'un ni sur l'autre.
-  const y = r.h - r.safeBottom - 73
+  // Au-dessus du bouton d'overclock (dont le haut est à h-76), sous l'arène
+  // (qui s'arrête à h-104) : le bandeau se loge dans cette bande de 28 px.
+  const y = r.h - r.safeBottom - 84
   ctx.save()
   ctx.font = `700 12px ${MONO}`
   ctx.textAlign = 'center'
@@ -486,6 +486,8 @@ const drawOverclockMeter = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer
   const y = r.h - 46 - r.safeBottom
   const ready = run.charge >= 1
   const active = run.overclock > 0
+  // Quand l'overclock est prêt, un vrai bouton HTML prend la place de la jauge.
+  if (ready && !active) return
 
   ctx.fillStyle = 'rgba(255,255,255,0.07)'
   ctx.fillRect(x, y, w, 8)
@@ -507,7 +509,7 @@ const drawOverclockMeter = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer
     ctx.font = `700 11px ${MONO}`
     ctx.textAlign = 'center'
     ctx.fillStyle = ready ? COLORS.playerGlow : COLORS.dim
-    ctx.fillText(ready ? 'ESPACE / TAP LA BARRE — OVERCLOCK' : 'CHARGE OVERCLOCK', r.w / 2, y - 8)
+    ctx.fillText('CHARGE OVERCLOCK', r.w / 2, y - 8)
     ctx.textAlign = 'left'
   }
 }

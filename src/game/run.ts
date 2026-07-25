@@ -163,7 +163,7 @@ export class Run {
     this.x0 = pad
     this.x1 = r.w - pad
     this.y0 = 114 + r.safeTop
-    this.y1 = r.h - 88 - r.safeBottom
+    this.y1 = r.h - 104 - r.safeBottom
     const cols = Math.max(4, Math.ceil((this.x1 - this.x0) / CELL))
     const rows = Math.max(4, Math.ceil((this.y1 - this.y0) / CELL))
     if (cols !== this.cols || rows !== this.rows) {

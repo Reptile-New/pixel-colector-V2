@@ -494,3 +494,32 @@ button.small { padding: 9px 12px; font-size: 11px; letter-spacing: 0.09em; }
   background: transparent;
 }
 .tuto-skip-float:hover { opacity: 1; background: rgba(255, 255, 255, 0.06); }
+
+/* Bouton d'overclock : occupe exactement la place de la jauge dessinée. */
+.oc-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(36px + env(safe-area-inset-bottom));
+  width: min(320px, calc(100% - 64px));
+  padding: 11px 12px;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  color: #d8fff6;
+  background: linear-gradient(180deg, rgba(77, 249, 214, 0.32), rgba(77, 249, 214, 0.12));
+  border-color: rgba(77, 249, 214, 0.7);
+  box-shadow: 0 0 26px rgba(77, 249, 214, 0.28);
+  animation: ocPulse 1.1s ease-in-out infinite;
+}
+.oc-btn:active { transform: translateX(-50%) translateY(1px); }
+
+@keyframes ocPulse {
+  50% {
+    border-color: rgba(77, 249, 214, 1);
+    box-shadow: 0 0 34px rgba(77, 249, 214, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oc-btn { animation: none; }
+}
