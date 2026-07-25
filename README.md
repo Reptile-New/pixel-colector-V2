@@ -108,6 +108,25 @@ Deux choix structurants :
   (même graine pour tout le monde), des bugs reproductibles, et des spécimens
   vérifiables.
 
+## Jouer entre potes — sans serveur
+
+Une run étant entièrement déterminée par sa graine, deux personnes avec la même
+graine jouent **exactement la même arène**. Le duel tient donc dans un lien :
+
+1. Fin de partie → **DÉFIER UN POTE** (partage natif sur mobile, presse-papier ailleurs)
+2. Le pote ouvre le lien → il voit ton score et joue ta partie, à l'identique
+3. Verdict immédiat, puis **RENVOYER LE DÉFI**
+
+Aucun compte, aucun serveur, aucune donnée qui quitte l'appareil. L'écran
+**RIVALITÉS** tient le bilan victoires/défaites face à chaque adversaire.
+
+Les améliorations permanentes sont **neutralisées pendant un duel** : même graine
+*et* mêmes statistiques, sinon la comparaison ne veut rien dire. Les bits et les
+spécimens sont gagnés normalement.
+
+Pour un vrai classement en ligne plus tard, `src/meta/leaderboard.ts` définit déjà
+l'interface à implémenter.
+
 ## Contenu
 
 - **48 spécimens** à collectionner, chacun avec un sprite pixel-art généré depuis

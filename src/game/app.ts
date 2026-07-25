@@ -2,7 +2,9 @@ import { audio } from '../audio/audio'
 import { Input } from '../core/input'
 import { clamp } from '../core/math'
 import { hashSeed, randomSeed } from '../core/rng'
+import { type Challenge, recordDuel, readChallengeFromUrl, sanitizeName } from '../meta/challenge'
 import { InstallPrompt } from '../meta/install'
+import { LocalLeaderboard } from '../meta/leaderboard'
 import { applyRunToMissions, rollMissions } from '../meta/missions'
 import {
   type Profile,
@@ -20,11 +22,12 @@ import {
   type RewardPlacement,
   type Sku,
 } from '../monetize/monetization'
+import { dayNumber, shareChallenge } from '../meta/share'
 import { drawRun } from '../render/drawRun'
 import { Particles } from '../render/particles'
 import { SKINS, skinById } from '../render/palette'
 import { Renderer } from '../render/renderer'
-import { type AppApi, type RunResult, Ui } from '../ui/screens'
+import { type AppApi, type DuelOutcome, type RunResult, Ui } from '../ui/screens'
 import { Run } from './run'
 import { RARITY_BITS, SPECIMENS } from './specimens'
 import { conditionMet, emptyRunStats } from './stats'
@@ -44,6 +47,12 @@ export class App implements AppApi {
   private ui: Ui
   private money: Monetization
   private installer = new InstallPrompt()
+  private board = new LocalLeaderboard()
+
+  /** A challenge opened from a link, waiting to be accepted. */
+  pendingChallenge: Challenge | null = null
+  /** The challenge the current/last run is answering. */
+  private activeChallenge: Challenge | null = null
 
   private run: Run | null = null
   private state: State = 'menu'
@@ -106,7 +115,8 @@ export class App implements AppApi {
     })
     window.addEventListener('resize', () => this.run?.layout())
 
-    this.ui.show('menu')
+    this.pendingChallenge = readChallengeFromUrl()
+    this.ui.show(this.pendingChallenge ? 'challenge' : 'menu')
     requestAnimationFrame(this.frame)
   }
 
@@ -205,12 +215,35 @@ export class App implements AppApi {
 
   start(daily: boolean): void {
     if (daily && this.profile.dailyPlayed) return
+    this.activeChallenge = null
+    this.launch(daily ? hashSeed(`daily:${todayKey()}`) : randomSeed(), daily, resolveMods(this.profile.upgrades))
+  }
+
+  /** Accepts the challenge currently on screen. */
+  acceptChallenge(): void {
+    const c = this.pendingChallenge
+    if (!c) return
+    this.activeChallenge = c
+    this.pendingChallenge = null
+    // Upgrades are neutralised in a duel. Same seed *and* same stats is the only
+    // way the comparison means anything — a maxed account versus a newcomer is
+    // not a contest. Bits and specimens are still earned, so nothing is wasted.
+    this.launch(c.seed, false, resolveMods({}))
+  }
+
+  /** Replays the same arena as the last challenge, to try to beat it again. */
+  replayChallenge(): void {
+    const c = this.activeChallenge
+    if (!c) return
+    this.launch(c.seed, false, resolveMods({}))
+  }
+
+  private launch(seed: number, daily: boolean, mods: ReturnType<typeof resolveMods>): void {
     audio.unlock()
     if (this.profile.settings.music) audio.startMusic()
 
-    const seed = daily ? hashSeed(`daily:${todayKey()}`) : randomSeed()
     this.particles.clear()
-    this.run = new Run(seed, resolveMods(this.profile.upgrades), this.renderer, this.particles, daily)
+    this.run = new Run(seed, mods, this.renderer, this.particles, daily)
     this.state = 'running'
     this.usedRevive = false
     this.canRevive = false
@@ -232,6 +265,7 @@ export class App implements AppApi {
       this.finalise(this.run)
     }
     this.run = null
+    this.activeChallenge = null
     this.state = 'menu'
     audio.setDanger(0)
     this.rollDailyContent()
@@ -239,7 +273,10 @@ export class App implements AppApi {
   }
 
   retry(): void {
-    this.maybeInterstitial(() => this.start(this.lastResult?.daily === true && !this.profile.dailyPlayed))
+    this.maybeInterstitial(() => {
+      if (this.activeChallenge) this.replayChallenge()
+      else this.start(this.lastResult?.daily === true && !this.profile.dailyPlayed)
+    })
   }
 
   private endRun(): void {
@@ -289,11 +326,35 @@ export class App implements AppApi {
       this.ui.toast(`MISSION TERMINÉE · +${m.reward} ⬡`, 'gold')
     }
 
+    // Duel resolution: the rivalry record is what turns a one-off link into an
+    // ongoing thing between two people.
+    let duel: DuelOutcome | null = null
+    const c = this.activeChallenge
+    if (c) {
+      const r = recordDuel(p.rivals, c.name, s.score, c.score, todayKey())
+      duel = {
+        name: c.name,
+        theirScore: c.score,
+        yourScore: s.score,
+        won: s.score > c.score,
+        delta: Math.abs(s.score - c.score),
+        record: { wins: r.wins, losses: r.losses },
+      }
+      if (c.day) {
+        this.board.record(c.day, { name: c.name, score: c.score, wave: c.wave, chain: c.chain, you: false })
+      }
+    }
+
+    if (s.daily && p.name) void this.board.submit(todayKey(), s, p.name)
+
     p.runsSinceAd += 1
     const isRecord = s.score > 0 && s.score > previousBest
     saveProfileNow(p)
 
-    return { stats: { ...s }, bits, newSpecimens, completedMissions: completed.length, isRecord, daily: s.daily }
+    return {
+      stats: { ...s }, bits, newSpecimens, completedMissions: completed.length,
+      isRecord, daily: s.daily, duel,
+    }
   }
 
   // ───────────────────────── specimens ─────────────────────────
@@ -493,6 +554,45 @@ export class App implements AppApi {
 
   toast(msg: string, kind: 'info' | 'gold' | 'danger' = 'info'): void {
     this.ui.toast(msg, kind)
+  }
+
+  // ───────────────────────── social ─────────────────────────
+
+  declineChallenge(): void {
+    this.pendingChallenge = null
+    this.ui.show('menu')
+  }
+
+  get playerName(): string {
+    return this.profile.name
+  }
+
+  setName(name: string): void {
+    this.profile.name = sanitizeName(name)
+    saveProfileNow(this.profile)
+  }
+
+  /** Share the last run as a challenge on the very same seed. */
+  shareRun(): void {
+    const r = this.lastResult
+    if (!r || !this.run) return
+    if (!this.profile.name) {
+      const entered = prompt('Ton pseudo (visible par tes potes) :', '')
+      if (!entered) return
+      this.setName(entered)
+    }
+    const challenge = {
+      name: this.profile.name,
+      seed: this.run.seed,
+      score: r.stats.score,
+      wave: r.stats.wave,
+      chain: r.stats.bestChain,
+      day: r.daily ? todayKey() : '',
+    }
+    void shareChallenge(challenge, r.stats, r.daily ? dayNumber(todayKey()) : null).then((outcome) => {
+      if (outcome === 'copied') this.ui.toast('LIEN COPIÉ — COLLE-LE DANS TA CONVERSATION', 'gold')
+      else if (outcome === 'failed') this.ui.toast('PARTAGE IMPOSSIBLE SUR CE NAVIGATEUR', 'danger')
+    })
   }
 
   get canInstall(): boolean {

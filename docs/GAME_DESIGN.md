@@ -70,6 +70,51 @@ Une run se termine en 2 à 4 minutes. Format mobile, format « encore une ».
 5. **MISSIONS** — 3 objectifs tournants → coffre.
 6. **SKINS / PALETTES** — cosmétiques débloqués par l'album. Monétisation non pay-to-win.
 
+## 3 bis. La couche sociale — pourquoi elle tient sans serveur
+
+Le vrai levier de rétention d'un jeu de score n'est pas le score : c'est **quelqu'un
+d'autre qui a fait mieux que toi**. Un classement mondial ne produit pas ça (tu ne
+rattraperas jamais le premier). Un pote qui te met 400 points d'avance, si.
+
+La propriété technique qui rend ça possible : **une run est entièrement déterminée
+par sa graine**. Deux personnes avec la même graine jouent exactement la même arène
+— mêmes spawns, mêmes traqueurs, mêmes vagues, mêmes modificateurs. Donc :
+
+### Le duel tient dans un lien
+
+Fin de partie → **DÉFIER UN POTE** → le pseudo, la graine et le score sont encodés
+dans le fragment de l'URL. Le pote ouvre le lien, voit ton score, joue **ta** partie,
+et découvre immédiatement s'il t'a battu — puis peut te renvoyer le défi.
+
+Aucun serveur, aucun compte, aucune donnée personnelle qui quitte l'appareil, aucun
+coût d'hébergement, rien à maintenir. C'est le mécanisme qui a fait Wordle.
+
+### Deux décisions de conception qui comptent
+
+1. **Les améliorations sont neutralisées dans un duel.** Même graine *et* mêmes
+   statistiques, sinon un compte bien équipé gagne sans jouer et la comparaison ne
+   veut plus rien dire. Les bits et les spécimens continuent d'être gagnés : le duel
+   ne fait perdre aucune progression.
+2. **Le classement local ne montre jamais un score que l'appareil n'a pas vu.**
+   Pas de faux classement mondial peuplé de bots — la table des rivalités ne contient
+   que des gens dont un lien est réellement passé par là.
+
+### Le bilan face à chacun
+
+Chaque duel alimente une fiche par adversaire : victoires, défaites, son record, le
+tien. C'est ce qui transforme un lien isolé en rivalité qui dure — et c'est la
+raison de revenir qui ne dépend d'aucune notification.
+
+### Passer en ligne, plus tard
+
+`src/meta/leaderboard.ts` définit l'interface `LeaderboardProvider`, avec aujourd'hui
+une implémentation locale. Un classement en ligne (Supabase, Cloudflare Workers + D1,
+40 lignes d'Express) se branche sans toucher au jeu. Deux points comptent plus que
+le choix de l'hébergeur : la graine étant publique, un client peut annoncer n'importe
+quel score — soit on l'accepte entre amis, soit le serveur rejoue la run ; et les
+pseudos sont du contenu utilisateur affiché à d'autres utilisateurs, donc à assainir
+à l'entrée.
+
 ## 4. Game feel — la partie non négociable
 
 Un jeu d'arcade est bon ou mauvais dans les 50 premières millisecondes de réponse.

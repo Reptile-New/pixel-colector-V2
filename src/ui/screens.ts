@@ -7,7 +7,19 @@ import { streakMultiplier } from '../meta/save'
 import { PRODUCTS, type RewardPlacement, type Sku } from '../monetize/monetization'
 import { SKINS } from '../render/palette'
 
-export type ScreenId = 'none' | 'menu' | 'album' | 'upgrades' | 'shop' | 'settings' | 'gameover' | 'pause'
+export type ScreenId =
+  | 'none' | 'menu' | 'album' | 'upgrades' | 'shop' | 'settings' | 'gameover' | 'pause'
+  | 'challenge' | 'rivals'
+
+export interface DuelOutcome {
+  name: string
+  theirScore: number
+  yourScore: number
+  won: boolean
+  /** Absolute point gap, so the UI never has to do the arithmetic. */
+  delta: number
+  record: { wins: number; losses: number }
+}
 
 export interface RunResult {
   stats: RunStats
@@ -16,6 +28,7 @@ export interface RunResult {
   completedMissions: number
   isRecord: boolean
   daily: boolean
+  duel: DuelOutcome | null
 }
 
 /** What the UI is allowed to ask the app to do. Keeps the DOM layer dumb. */
@@ -40,6 +53,12 @@ export interface AppApi {
   toast(msg: string, kind?: 'info' | 'gold' | 'danger'): void
   canInstall: boolean
   install(): void
+  pendingChallenge: { name: string; score: number; wave: number; chain: number } | null
+  acceptChallenge(): void
+  declineChallenge(): void
+  shareRun(): void
+  playerName: string
+  setName(name: string): void
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR')
@@ -84,6 +103,15 @@ export class Ui {
       case 'go': this.show(arg as ScreenId); break
       case 'menu': a.quitToMenu(); break
       case 'install': a.install(); break
+      case 'accept': a.acceptChallenge(); break
+      case 'decline': a.declineChallenge(); break
+      case 'share': a.shareRun(); break
+      case 'name': {
+        const entered = prompt('Ton pseudo (visible par tes potes) :', a.playerName)
+        if (entered !== null) a.setName(entered)
+        this.show(this.current)
+        break
+      }
       case 'resume': a.resume(); break
       case 'retry': a.retry(); break
       case 'revive': a.revive(); break
@@ -133,6 +161,8 @@ export class Ui {
       settings: () => this.settings(),
       gameover: () => this.gameOver(),
       pause: () => this.pause(),
+      challenge: () => this.challenge(),
+      rivals: () => this.rivals(),
     }
     this.root.appendChild(builders[id]())
   }
@@ -190,7 +220,10 @@ export class Ui {
           <button data-act="go" data-arg="upgrades">AMÉLIORER</button>
         </div>
         <div class="row">
+          <button data-act="go" data-arg="rivals">RIVALITÉS${p.rivals.length ? ` (${p.rivals.length})` : ''}</button>
           <button data-act="go" data-arg="shop">BOUTIQUE</button>
+        </div>
+        <div class="row">
           <button data-act="go" data-arg="settings">OPTIONS</button>
         </div>
       </div>
@@ -234,11 +267,27 @@ export class Ui {
       })
       .join('')
 
+    const d = r.duel
+    const duelPanel = d
+      ? `<div class="panel" style="border-color:${d.won ? 'rgba(77,249,214,.45)' : 'rgba(255,46,85,.45)'}">
+          <h2>DUEL CONTRE ${d.name}</h2>
+          <div class="big-score" style="font-size:clamp(22px,7vw,34px);color:${d.won ? 'var(--accent)' : 'var(--danger)'}">
+            ${d.won ? `TU GAGNES DE ${fmt(d.delta)}` : `IL T'EN MANQUE ${fmt(d.delta)}`}
+          </div>
+          <div class="kv" style="margin-top:10px"><span>SON SCORE</span><span>${fmt(d.theirScore)}</span></div>
+          <div class="kv"><span>LE TIEN</span><span>${fmt(d.yourScore)}</span></div>
+          <div class="kv" style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px">
+            <span>BILAN FACE À LUI</span><span>${d.record.wins}V — ${d.record.losses}D</span>
+          </div>
+        </div>`
+      : ''
+
     return el(`<div class="screen">
       ${this.topbar()}
       <div class="big-score">${fmt(s.score)}</div>
-      <div class="big-label">${r.daily ? 'RUN DU JOUR' : 'SCORE FINAL'}</div>
+      <div class="big-label">${r.daily ? 'RUN DU JOUR' : d ? 'DUEL' : 'SCORE FINAL'}</div>
       ${r.isRecord ? '<div class="record">★ NOUVEAU RECORD ★</div>' : ''}
+      ${duelPanel}
 
       <div class="panel" style="margin-top:18px">
         <div class="kv"><span>VAGUE ATTEINTE</span><span>${s.wave}</span></div>
@@ -256,15 +305,99 @@ export class Ui {
       ${r.completedMissions ? `<div class="panel"><h2>MISSIONS</h2><div class="kv"><span>TERMINÉES</span><span>${r.completedMissions}</span></div></div>` : ''}
 
       <div class="stack">
+        <button class="primary" data-act="share">${d ? '↩ RENVOYER LE DÉFI' : '⚔ DÉFIER UN POTE'}</button>
         ${this.app.canRevive ? '<button class="gold" data-act="revive">▶ CONTINUER — REGARDER UNE PUB</button>' : ''}
         <button class="gold" data-act="double" ${this.app.rewardedReady ? '' : 'disabled'}>×2 BITS — REGARDER UNE PUB</button>
-        <button class="primary" data-act="retry">REJOUER</button>
+        <button data-act="retry">REJOUER</button>
         <div class="row">
           <button data-act="go" data-arg="album">ALBUM</button>
           <button data-act="go" data-arg="upgrades">AMÉLIORER</button>
         </div>
         <button class="ghost small" data-act="menu">MENU</button>
       </div>
+    </div>`)
+  }
+
+  /** Landing screen when the player opens a friend's link. */
+  private challenge(): HTMLElement {
+    const c = this.app.pendingChallenge
+    if (!c) return this.menu()
+    return el(`<div class="screen">
+      <div class="tagline" style="margin-bottom:8px">UN DÉFI T'ATTEND</div>
+      <h1 class="title" style="font-size:clamp(26px,7vw,44px)">${c.name}</h1>
+      <div class="big-score" style="color:var(--gold);margin-top:10px">${fmt(c.score)}</div>
+      <div class="big-label">SON SCORE</div>
+
+      <div class="panel" style="margin-top:20px">
+        <div class="kv"><span>VAGUE ATTEINTE</span><span>${c.wave}</span></div>
+        <div class="kv"><span>MEILLEURE CHAÎNE</span><span>×${c.chain}</span></div>
+      </div>
+
+      <div class="panel">
+        <h2>RÈGLES DU DUEL</h2>
+        <div class="footnote">
+          Tu vas jouer <b>exactement la même arène</b> : mêmes pixels, mêmes traqueurs,
+          mêmes vagues. Rien n'est laissé au hasard.<br><br>
+          Tes améliorations sont <b>neutralisées</b> des deux côtés — sinon un compte
+          bien équipé gagnerait sans jouer. Tu gagnes quand même tes bits et tes spécimens.
+        </div>
+      </div>
+
+      <div class="stack">
+        <button class="primary" data-act="accept">RELEVER LE DÉFI</button>
+        <button class="ghost small" data-act="decline">PLUS TARD — ALLER AU MENU</button>
+      </div>
+    </div>`)
+  }
+
+  /** Head-to-head record against everyone who has ever sent or received a link. */
+  private rivals(): HTMLElement {
+    const p = this.app.profile
+    const sorted = [...p.rivals].sort((a, b) => b.wins + b.losses - (a.wins + a.losses))
+    const rows = sorted
+      .map((r) => {
+        const total = r.wins + r.losses
+        const pct = total ? (r.wins / total) * 100 : 0
+        const lead = r.wins > r.losses ? 'var(--accent)' : r.losses > r.wins ? 'var(--danger)' : 'var(--dim)'
+        return `<div class="mission">
+          <div class="t">
+            <span><b style="color:${lead}">${r.name}</b></span>
+            <b style="color:${lead}">${r.wins}V — ${r.losses}D</b>
+          </div>
+          <div class="bar"><i style="width:${pct}%"></i></div>
+          <div class="footnote" style="margin-top:6px">
+            Son record ${fmt(r.theirBest)} · le tien ${fmt(r.yourBest)}
+          </div>
+        </div>`
+      })
+      .join('')
+
+    return el(`<div class="screen">
+      ${this.topbar()}
+      <h1 class="title" style="font-size:26px">RIVALITÉS</h1>
+      <div class="tagline">${sorted.length ? `${sorted.length} adversaire${sorted.length > 1 ? 's' : ''}` : 'AUCUN DUEL POUR L\'INSTANT'}</div>
+
+      ${
+        sorted.length
+          ? `<div class="scroll"><div class="panel">${rows}</div></div>`
+          : `<div class="panel"><div class="footnote">
+              Termine une partie, appuie sur <b>DÉFIER UN POTE</b>, et envoie le lien.
+              Ton pote jouera la même arène que toi — et le score des deux côtés
+              atterrira ici.
+            </div></div>`
+      }
+
+      <div class="panel">
+        <div class="up">
+          <div class="info">
+            <div class="n">TON PSEUDO</div>
+            <div class="d">Visible par les gens que tu défies.</div>
+          </div>
+          <button data-act="name">${this.app.playerName || 'CHOISIR'}</button>
+        </div>
+      </div>
+
+      <div class="stack"><button data-act="menu">RETOUR</button></div>
     </div>`)
   }
 

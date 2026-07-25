@@ -1,4 +1,5 @@
 import type { UpgradeLevels } from '../game/upgrades'
+import type { Rival } from './challenge'
 import type { MissionState } from './missions'
 
 const KEY = 'pixel-collector:v1'
@@ -19,6 +20,9 @@ export interface Entitlements {
 
 export interface Profile {
   version: number
+  /** Display name shown to friends in challenge links. Empty until first share. */
+  name: string
+  rivals: Rival[]
   bits: number
   upgrades: UpgradeLevels
   specimens: number[]
@@ -53,6 +57,8 @@ export const todayKey = (d = new Date()): string =>
 
 const emptyProfile = (): Profile => ({
   version: 1,
+  name: '',
+  rivals: [],
   bits: 0,
   upgrades: {},
   specimens: [],
@@ -95,6 +101,7 @@ export const loadProfile = (): Profile => {
       specimens: Array.isArray(parsed.specimens) ? parsed.specimens : [],
       ownedSkins: Array.isArray(parsed.ownedSkins) ? parsed.ownedSkins : ['default'],
       missions: Array.isArray(parsed.missions) ? parsed.missions : [],
+      rivals: Array.isArray(parsed.rivals) ? parsed.rivals : [],
     }
   } catch {
     // Corrupted save (quota, private mode, manual edit): start clean rather than crash.
