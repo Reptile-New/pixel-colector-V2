@@ -7,7 +7,38 @@ import type { Renderer } from './renderer'
 const MONO = 'ui-monospace, "DM Mono", "SF Mono", Menlo, monospace'
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR')
 
-export const drawRun = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, skin: Skin, t: number): void => {
+/**
+ * Screen-space rectangles of every HUD element, so the tutorial can point at the
+ * exact thing it is talking about. Kept next to the drawing code that owns those
+ * coordinates — anywhere else and the two would drift apart.
+ */
+export const hudZones = (r: Renderer): Record<string, { x: number; y: number; w: number; h: number }> => {
+  const PAD = 16
+  const column = r.w * 0.46 - PAD
+  const meter = Math.min(320, r.w - 60)
+  return {
+    score: { x: PAD - 6, y: 20, w: column + 12, h: 50 },
+    buffer: { x: r.w - PAD - column - 6, y: 18, w: column + 12, h: 50 },
+    mult: { x: r.w - PAD - 118, y: 48, w: 124, h: 26 },
+    shards: { x: PAD - 6, y: 70, w: 92, h: 28 },
+    wave: { x: r.w - PAD - column - 6, y: 74, w: column + 12, h: 34 },
+    overclock: { x: (r.w - meter) / 2 - 10, y: r.h - 66, w: meter + 20, h: 32 },
+  }
+}
+
+export type Highlight =
+  | { kind: 'world'; x: number; y: number; radius: number }
+  | { kind: 'hud'; zone: string }
+  | null
+
+export const drawRun = (
+  ctx: CanvasRenderingContext2D,
+  run: Run,
+  r: Renderer,
+  skin: Skin,
+  t: number,
+  highlight: Highlight = null,
+): void => {
   drawArena(ctx, run, t)
   drawCorruption(ctx, run, t)
   drawVaultLink(ctx, run)
@@ -18,6 +49,40 @@ export const drawRun = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, sk
   run.particles.draw(ctx)
   if (run.wave.modifier === 'blackout') drawBlackout(ctx, run, r)
   drawHud(ctx, run, r, t)
+  if (highlight) drawHighlight(ctx, r, highlight, t)
+}
+
+/** Pulsing marker used by the tutorial. Drawn last so nothing hides it. */
+const drawHighlight = (ctx: CanvasRenderingContext2D, r: Renderer, h: Highlight, t: number): void => {
+  if (!h) return
+  const pulse = 0.5 + 0.5 * Math.sin(t * 4.5)
+  ctx.save()
+  ctx.strokeStyle = rgba(HUES[0].core, 0.55 + pulse * 0.45)
+  ctx.lineWidth = 2.5
+  ctx.setLineDash([7, 6])
+  ctx.lineDashOffset = -t * 40
+
+  if (h.kind === 'world') {
+    const radius = h.radius + pulse * 7
+    ctx.beginPath()
+    ctx.arc(h.x, h.y, radius, 0, TAU)
+    ctx.stroke()
+    ctx.globalCompositeOperation = 'lighter'
+    const g = ctx.createRadialGradient(h.x, h.y, radius * 0.7, h.x, h.y, radius * 1.5)
+    g.addColorStop(0, rgba(HUES[0].glow, 0.16))
+    g.addColorStop(1, rgba(HUES[0].glow, 0))
+    ctx.fillStyle = g
+    ctx.fillRect(h.x - radius * 1.5, h.y - radius * 1.5, radius * 3, radius * 3)
+  } else {
+    const z = hudZones(r)[h.zone]
+    if (z) {
+      const grow = pulse * 3
+      ctx.strokeRect(z.x - grow, z.y - grow, z.w + grow * 2, z.h + grow * 2)
+      ctx.fillStyle = rgba(HUES[0].glow, 0.07 + pulse * 0.06)
+      ctx.fillRect(z.x, z.y, z.w, z.h)
+    }
+  }
+  ctx.restore()
 }
 
 // ───────────────────────── world ─────────────────────────

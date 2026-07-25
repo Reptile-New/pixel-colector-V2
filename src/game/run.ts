@@ -104,6 +104,13 @@ export class Run {
   /** Set while a revive is pending so the sim stays frozen. */
   paused = false
 
+  // ── Tutorial gates ──
+  /** The tutorial introduces threats one at a time; both are true in a real run. */
+  allowHunters = true
+  allowCorruption = true
+  /** Stops the wave clock so a guided run never escalates under the player. */
+  freezeWaves = false
+
   timeScale = 1
   private hitstop = 0
   private spreadAcc = 0
@@ -197,6 +204,7 @@ export class Run {
     this.stats.wave = index
     this.events.push({ type: 'wave', spec: this.wave })
 
+    if (!this.allowHunters) return
     const target = this.wave.hunters + (this.wave.modifier === 'swarm' ? 3 : 0)
     while (this.hunters.filter((h) => h.alive).length < target) this.spawnHunter()
   }
@@ -350,8 +358,10 @@ export class Run {
     this.updateVault(dt)
     this.updateOverclock(dt, input)
 
-    this.waveTimer -= dt
-    if (this.waveTimer <= 0) this.startWave(this.waveIndex + 1)
+    if (!this.freezeWaves) {
+      this.waveTimer -= dt
+      if (this.waveTimer <= 0) this.startWave(this.waveIndex + 1)
+    }
 
     // Danger feedback: the drone tracks how much is at stake.
     audio.setDanger(clamp(this.buffer / 6000, 0, 1) * 0.9 + (this.shards === 1 ? 0.35 : 0))
@@ -568,7 +578,7 @@ export class Run {
     this.spreadAcc += dt
     if (this.spreadAcc > 0.3) {
       this.spreadAcc = 0
-      if (corrupted / total < this.wave.corruptionTarget) this.seedCorruption()
+      if (this.allowCorruption && corrupted / total < this.wave.corruptionTarget) this.seedCorruption()
     }
 
     // Standing in fully corrupted ground hurts.
@@ -750,6 +760,21 @@ export class Run {
     this.renderer.aberration = 1
     this.particles.burst(this.px, this.py, COLORS.player, 60, 460, 6)
     this.events.push({ type: 'death' })
+  }
+
+  /** Used by the tutorial to introduce a single, controlled threat. */
+  spawnOneHunter(): void {
+    this.spawnHunter()
+  }
+
+  /** Used by the tutorial to hand the player a ready overclock. */
+  fillOverclock(): void {
+    this.charge = 1
+  }
+
+  /** Used by the tutorial to seed one visible corruption patch on demand. */
+  seedOneCorruption(): void {
+    this.seedCorruption()
   }
 
   /** Rewarded-ad continue: restore one shard and clear the area. */

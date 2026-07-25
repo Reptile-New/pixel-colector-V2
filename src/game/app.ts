@@ -5,7 +5,7 @@ import { hashSeed, randomSeed } from '../core/rng'
 import { type Challenge, recordDuel, readChallengeFromUrl, sanitizeName } from '../meta/challenge'
 import { InstallPrompt } from '../meta/install'
 import { LocalLeaderboard } from '../meta/leaderboard'
-import { applyRunToMissions, rollMissions } from '../meta/missions'
+import { applyRunToMissions, missionLabel, rollMissions } from '../meta/missions'
 import {
   type Profile,
   clearAllStorage,
@@ -24,12 +24,13 @@ import {
   type Sku,
 } from '../monetize/monetization'
 import { dayNumber, shareChallenge } from '../meta/share'
-import { drawRun } from '../render/drawRun'
+import { type Highlight, drawRun } from '../render/drawRun'
 import { Particles } from '../render/particles'
 import { SKINS, skinById } from '../render/palette'
 import { Renderer } from '../render/renderer'
 import { type AppApi, type DuelOutcome, type RunResult, Ui } from '../ui/screens'
 import { Run } from './run'
+import { Tutorial } from './tutorial'
 import { RARITY_BITS, SPECIMENS } from './specimens'
 import { conditionMet, emptyRunStats } from './stats'
 import { UPGRADES, resolveMods, upgradeCost } from './upgrades'
@@ -69,6 +70,7 @@ export class App implements AppApi {
   private credited = { score: 0, collected: 0, banks: 0, overclocks: 0, counted: false }
   /** Le doublement de bits n'est offert qu'une fois par run. */
   private bitsDoubled = false
+  private tutorial: Tutorial | null = null
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.profile = loadProfile()
@@ -123,7 +125,9 @@ export class App implements AppApi {
     window.addEventListener('resize', () => this.run?.layout())
 
     this.pendingChallenge = readChallengeFromUrl()
-    this.ui.show(this.pendingChallenge ? 'challenge' : 'menu')
+    if (this.pendingChallenge) this.ui.show('challenge')
+    else if (!this.profile.seenIntro) this.ui.show('intro')
+    else this.ui.show('menu')
     requestAnimationFrame(this.frame)
   }
 
@@ -161,6 +165,11 @@ export class App implements AppApi {
     this.input.poll()
 
     if (this.state === 'running' && this.run) {
+      // The tutorial runs before the sim so a freeze takes effect on the very
+      // frame the step opens, not one frame late.
+      if (this.tutorial && !this.tutorial.finished) {
+        if (this.tutorial.update(dt, this.run)) this.refreshTutorialPanel()
+      }
       this.run.update(dt, this.input)
       this.consumeEvents()
       this.checkSpecimens(dt)
@@ -173,7 +182,7 @@ export class App implements AppApi {
 
     const ctx = this.renderer.begin()
     if (this.run) {
-      drawRun(ctx, this.run, this.renderer, skinById(this.profile.skin), this.clock)
+      drawRun(ctx, this.run, this.renderer, skinById(this.profile.skin), this.clock, this.highlight())
     } else {
       this.drawIdleBackdrop(ctx)
     }
@@ -261,13 +270,108 @@ export class App implements AppApi {
     this.ui.showRunChrome(this.hintStage ? 'RÉCOLTE LES PIXELS' : null)
   }
 
+  /** Starts the guided run. Upgrades are neutralised so the script is predictable. */
+  startTutorial(): void {
+    this.activeChallenge = null
+    this.tutorial = new Tutorial()
+    this.launch(hashSeed('tutorial'), false, resolveMods({}))
+    this.tutorial.begin(this.run!)
+    this.refreshTutorialPanel()
+  }
+
+  tutorialNext(): void {
+    if (!this.tutorial || !this.run) return
+    this.tutorial.advance(this.run)
+    if (this.tutorial.finished) this.endTutorial(true)
+    else this.refreshTutorialPanel()
+  }
+
+  tutorialSkip(): void {
+    if (!this.tutorial || !this.run) return
+    this.tutorial.skip(this.run)
+    this.endTutorial(false)
+  }
+
+  private endTutorial(completed: boolean): void {
+    this.tutorial = null
+    this.profile.seenIntro = true
+    saveProfileNow(this.profile)
+    this.ui.showRunChrome(null)
+    if (completed) this.ui.toast('BONNE CHASSE', 'gold')
+  }
+
+  private refreshTutorialPanel(): void {
+    if (!this.tutorial || this.tutorial.finished) return
+    const step = this.tutorial.step
+    // "Go touch the vault" is useless if the vault is hidden behind the panel:
+    // when the thing being pointed at sits in the panel's band, move the panel.
+    const focus = this.highlight()
+    const low = focus?.kind === 'world' && focus.y < this.renderer.h * 0.5
+    this.ui.showTutorial(
+      step.text,
+      this.tutorial.manual ? (step.button ?? 'SUIVANT') : null,
+      this.tutorial.progress,
+      low,
+    )
+  }
+
+  /** What the tutorial is currently pointing at. */
+  private highlight(): Highlight {
+    if (!this.tutorial || this.tutorial.finished || !this.run) return null
+    const run = this.run
+    switch (this.tutorial.step.focus) {
+      case 'player':
+        return { kind: 'world', x: run.px, y: run.py, radius: 30 }
+      case 'vault':
+        return { kind: 'world', x: run.vx, y: run.vy, radius: run.vaultR + 12 }
+      case 'pixels': {
+        let best: { x: number; y: number } | null = null
+        let bd = Infinity
+        for (const p of run.pixels) {
+          if (!p.alive) continue
+          const d = (p.x - run.px) ** 2 + (p.y - run.py) ** 2
+          if (d < bd) {
+            bd = d
+            best = p
+          }
+        }
+        return best ? { kind: 'world', x: best.x, y: best.y, radius: 24 } : null
+      }
+      case 'score':
+      case 'buffer':
+      case 'mult':
+      case 'shards':
+      case 'overclock':
+        return { kind: 'hud', zone: this.tutorial.step.focus }
+      default:
+        return null
+    }
+  }
+
+  get inTutorial(): boolean {
+    return this.tutorial !== null && !this.tutorial.finished
+  }
+
   resume(): void {
     if (!this.run || this.run.dead) return
     this.state = 'running'
-    this.ui.showRunChrome(null)
+    // Pausing mid-tutorial removed the instruction panel; put it back.
+    if (this.tutorial && !this.tutorial.finished) this.refreshTutorialPanel()
+    else this.ui.showRunChrome(null)
   }
 
   quitToMenu(): void {
+    if (this.tutorial) {
+      this.tutorial.skip(this.run!)
+      this.tutorial = null
+      this.profile.seenIntro = true
+      saveProfileNow(this.profile)
+      this.run = null
+      this.state = 'menu'
+      audio.setDanger(0)
+      this.ui.show('menu')
+      return
+    }
     if (this.state === 'paused' && this.run && !this.run.dead) {
       // Abandoning mid-run still counts: the player keeps what they banked.
       this.run.syncStats()
@@ -290,6 +394,18 @@ export class App implements AppApi {
 
   private endRun(): void {
     if (!this.run) return
+    if (this.tutorial) {
+      // Dying during the tutorial is not a failure: put the player back on their
+      // feet rather than throwing a score screen at someone still learning.
+      this.tutorial.skip(this.run)
+      this.tutorial = null
+      this.profile.seenIntro = true
+      this.run.revive()
+      this.state = 'running'
+      this.ui.showRunChrome(null)
+      this.ui.toast('TU AS PERDU UNE VIE — LA VRAIE PARTIE COMMENCE', 'danger')
+      return
+    }
     this.state = 'over'
     this.run.syncStats()
     this.canRevive = !this.usedRevive && !this.run.stats.daily && this.money.ads.isRewardedReady()
@@ -350,6 +466,9 @@ export class App implements AppApi {
 
     // Missions see the delta for cumulative goals and the real value for
     // "best of" goals, so a revive neither double-counts nor loses progress.
+    let specimenBits = 0
+    for (const id of newSpecimens) specimenBits += RARITY_BITS[SPECIMENS[id].rarity]
+
     const completed = applyRunToMissions(p.missions, {
       ...s,
       score: gained.score,
@@ -357,10 +476,11 @@ export class App implements AppApi {
       banks: gained.banks,
       overclocks: gained.overclocks,
     })
+    let missionBits = 0
     for (const m of completed) {
       p.bits += m.reward
+      missionBits += m.reward
       m.claimed = true
-      this.ui.toast(`MISSION TERMINÉE · +${m.reward} ⬡`, 'gold')
     }
 
     // Duel resolution: the rivalry record is what turns a one-off link into an
@@ -393,8 +513,16 @@ export class App implements AppApi {
     saveProfileNow(p)
 
     return {
-      stats: { ...s }, bits, newSpecimens, completedMissions: completed.length,
-      isRecord, daily: s.daily, duel,
+      stats: { ...s },
+      bits,
+      missionBits,
+      specimenBits,
+      completedMissionLabels: completed.map((m) => missionLabel(m)),
+      newSpecimens,
+      completedMissions: completed.length,
+      isRecord,
+      daily: s.daily,
+      duel,
     }
   }
 

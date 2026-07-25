@@ -9,7 +9,7 @@ import { SKINS } from '../render/palette'
 
 export type ScreenId =
   | 'none' | 'menu' | 'album' | 'upgrades' | 'shop' | 'settings' | 'gameover' | 'pause'
-  | 'challenge' | 'rivals'
+  | 'challenge' | 'rivals' | 'intro'
 
 export interface DuelOutcome {
   name: string
@@ -23,7 +23,13 @@ export interface DuelOutcome {
 
 export interface RunResult {
   stats: RunStats
+  /** Bits earned by the run itself — the only part the ×2 reward doubles. */
   bits: number
+  /** Credited on top of `bits`. Shown separately: a reward the player never
+   *  sees is a reward they believe they never got. */
+  missionBits: number
+  specimenBits: number
+  completedMissionLabels: string[]
   newSpecimens: number[]
   completedMissions: number
   isRecord: boolean
@@ -59,6 +65,10 @@ export interface AppApi {
   shareRun(): void
   playerName: string
   setName(name: string): void
+  startTutorial(): void
+  tutorialNext(): void
+  tutorialSkip(): void
+  inTutorial: boolean
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR')
@@ -111,6 +121,9 @@ export class Ui {
         break
       case 'menu': a.quitToMenu(); break
       case 'install': a.install(); break
+      case 'tuto': a.startTutorial(); break
+      case 'tutoNext': a.tutorialNext(); break
+      case 'tutoSkip': a.tutorialSkip(); break
       case 'accept': a.acceptChallenge(); break
       case 'decline': a.declineChallenge(); break
       case 'share': a.shareRun(); break
@@ -165,7 +178,7 @@ export class Ui {
     }
 
     this.current = id
-    this.root.querySelectorAll('.screen, .pause-btn, .hint').forEach((n) => n.remove())
+    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto').forEach((n) => n.remove())
     if (id === 'none') return
 
     const builders: Record<Exclude<ScreenId, 'none'>, () => HTMLElement> = {
@@ -178,6 +191,7 @@ export class Ui {
       pause: () => this.pause(),
       challenge: () => this.challenge(),
       rivals: () => this.rivals(),
+      intro: () => this.intro(),
     }
     const screen = builders[id]()
     this.root.appendChild(screen)
@@ -195,10 +209,42 @@ export class Ui {
 
   /** In-run chrome: a discreet pause button plus contextual first-run hints. */
   showRunChrome(hint: string | null): void {
-    this.root.querySelectorAll('.screen, .pause-btn, .hint').forEach((n) => n.remove())
+    this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto').forEach((n) => n.remove())
     this.current = 'none'
     this.root.appendChild(el('<button class="pause-btn ghost" data-act="go" data-arg="pause">PAUSE</button>'))
     if (hint) this.root.appendChild(el(`<div class="hint">${hint}</div>`))
+  }
+
+  /**
+   * Tutorial panel. `pointer-events: none` on the box and `auto` on the button:
+   * the player has to be able to drag *through* the panel to move, otherwise the
+   * very first instruction would be impossible to follow.
+   */
+  showTutorial(
+    text: string,
+    button: string | null,
+    progress: { current: number; total: number },
+    low = false,
+  ): void {
+    this.root.querySelectorAll('.screen, .hint, .tuto').forEach((n) => n.remove())
+    this.current = 'none'
+    if (!this.root.querySelector('.pause-btn')) {
+      this.root.appendChild(el('<button class="pause-btn ghost" data-act="go" data-arg="pause">PAUSE</button>'))
+    }
+    const dots = Array.from(
+      { length: progress.total },
+      (_, i) => `<i class="${i < progress.current ? 'on' : ''}"></i>`,
+    ).join('')
+    this.root.appendChild(
+      el(`<div class="tuto${low ? ' low' : ''}">
+        <div class="tuto-box">
+          <div class="tuto-dots">${dots}</div>
+          <div class="tuto-text">${text}</div>
+          ${button ? `<button class="primary tuto-next" data-act="tutoNext">${button}</button>` : '<div class="tuto-wait">À TOI DE JOUER…</div>'}
+          <button class="tuto-skip" data-act="tutoSkip">PASSER LE TUTO</button>
+        </div>
+      </div>`),
+    )
   }
 
   clearHint(): void {
@@ -250,6 +296,7 @@ export class Ui {
           <button data-act="go" data-arg="shop">BOUTIQUE</button>
         </div>
         <div class="row">
+          <button data-act="tuto">COMMENT JOUER</button>
           <button data-act="go" data-arg="settings">OPTIONS</button>
         </div>
       </div>
@@ -267,6 +314,29 @@ export class Ui {
       <div class="footnote" style="text-align:center;max-width:420px">
         Souris / doigt pour te déplacer · ESPACE pour l'overclock<br>
         Le score en risque n'est à toi qu'une fois déposé au vault.
+      </div>
+    </div>`)
+  }
+
+  /** First-ever launch. One decision, phrased so the answer is obvious. */
+  private intro(): HTMLElement {
+    return el(`<div class="screen">
+      <h1 class="title">PIXEL<span>COLLECTOR</span></h1>
+      <div class="tagline">RÉCOLTE · RISQUE · BANQUE</div>
+
+      <div class="panel">
+        <div class="footnote" style="font-size:12px;line-height:1.8">
+          Tu ramasses des pixels. Ils s'accumulent dans un <b style="color:var(--gold)">buffer</b>
+          qui n'est <b>pas encore à toi</b>.<br><br>
+          Pour le garder, tu dois le déposer au <b style="color:var(--gold)">vault</b>.
+          Si tu te fais toucher avant, <b style="color:var(--danger)">tu perds tout</b>.<br><br>
+          Ça s'apprend en une minute, manette en main.
+        </div>
+      </div>
+
+      <div class="stack">
+        <button class="primary" data-act="tuto">APPRENDRE À JOUER · 1 MIN</button>
+        <button class="ghost small" data-act="start">NON MERCI, JE ME LANCE</button>
       </div>
     </div>`)
   }
@@ -323,12 +393,28 @@ export class Ui {
         <div class="kv"><span>PLUS GROS DÉPÔT</span><span>${fmt(s.bestBank)}</span></div>
         <div class="kv"><span>DURÉE</span><span>${Math.floor(s.durationSec / 60)}:${String(Math.floor(s.durationSec % 60)).padStart(2, '0')}</span></div>
         <div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:10px">
-          <span>BITS GAGNÉS</span><span style="color:var(--gold)">⬡ ${fmt(r.bits)}</span>
+          <span>BITS DE LA RUN</span><span style="color:var(--gold)">⬡ ${fmt(r.bits)}</span>
         </div>
+        ${r.missionBits ? `<div class="kv"><span>MISSIONS TERMINÉES</span><span style="color:var(--gold)">+ ${fmt(r.missionBits)}</span></div>` : ''}
+        ${r.specimenBits ? `<div class="kv"><span>SPÉCIMENS CAPTURÉS</span><span style="color:var(--gold)">+ ${fmt(r.specimenBits)}</span></div>` : ''}
+        ${
+          r.missionBits || r.specimenBits
+            ? `<div class="kv" style="border-top:1px solid var(--line);margin-top:6px;padding-top:10px">
+                 <span style="color:var(--text)">TOTAL EMPOCHÉ</span>
+                 <span style="color:var(--gold);font-size:16px">⬡ ${fmt(r.bits + r.missionBits + r.specimenBits)}</span>
+               </div>`
+            : ''
+        }
       </div>
 
       ${specs ? `<div class="panel"><h2>NOUVEAUX SPÉCIMENS</h2>${specs}</div>` : ''}
-      ${r.completedMissions ? `<div class="panel"><h2>MISSIONS</h2><div class="kv"><span>TERMINÉES</span><span>${r.completedMissions}</span></div></div>` : ''}
+      ${
+        r.completedMissionLabels.length
+          ? `<div class="panel"><h2>MISSIONS DU JOUR TERMINÉES</h2>${r.completedMissionLabels
+              .map((label) => `<div class="kv"><span style="color:var(--accent)">✓ ${label}</span></div>`)
+              .join('')}</div>`
+          : ''
+      }
 
       <div class="stack">
         <button class="primary" data-act="share">${d ? '↩ RENVOYER LE DÉFI' : '⚔ DÉFIER UN POTE'}</button>

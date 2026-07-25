@@ -133,4 +133,28 @@ Un jeu d'arcade est bon ou mauvais dans les 50 premières millisecondes de répo
 
 - Pas d'énergie / de vies limitées : ça tue la rétention pour un jeu de skill.
 - Pas de pay-to-win : la monétisation ne touche jamais l'équilibre (cf. `MONETIZATION.md`).
-- Pas de tutoriel bloquant : la première run *est* le tutoriel (indices contextuels).
+- Pas de pub qui interrompt une partie (cf. `MONETIZATION.md`).
+
+## 6. Le tutoriel — ce qui a changé d'avis
+
+Le pari initial était « pas de tutoriel : la première run *est* le tutoriel, avec des
+indices contextuels ». **C'était faux.** Un joueur réel lâche l'affaire : le buffer,
+le vault, le multiplicateur et la corruption sont quatre idées nouvelles servies
+simultanément, sans nommer ce qui est à l'écran.
+
+Le tutoriel guidé (`src/game/tutorial.ts`) applique quatre règles :
+
+1. **Une idée par étape. Jamais deux.**
+2. **Le joueur fait la chose avant que l'idée suivante n'arrive.** Une étape
+   réalisable par une action ne s'avance jamais sur une minuterie — le jeu attend.
+3. **Les menaces arrivent une par une**, et seulement après que la boucle centrale
+   est comprise. La vague 1 d'une partie guidée n'a ni traqueur ni corruption : les
+   deux sont ouverts explicitement, à l'étape qui les explique.
+4. **On montre l'élément dont on parle.** Chaque étape surligne sa cible — le vault,
+   le compteur EN RISQUE, les vies — et le panneau se déplace s'il masque cette cible.
+
+Mourir pendant le tutoriel ne renvoie pas à un écran de score : le joueur est
+relevé et la vraie partie commence. Un débutant n'a pas à être puni pendant qu'il
+apprend.
+
+Le tout est passable à tout moment et rejouable depuis le menu (COMMENT JOUER).
