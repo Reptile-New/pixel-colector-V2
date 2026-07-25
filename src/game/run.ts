@@ -160,8 +160,20 @@ export class Run {
       this.cols = cols
       this.rows = rows
     }
-    this.px = clamp(this.px, this.x0, this.x1)
-    this.py = clamp(this.py, this.y0, this.y1)
+    this.px = clamp(this.px, this.x0 + this.pr, this.x1 - this.pr)
+    this.py = clamp(this.py, this.y0 + this.pr, this.y1 - this.pr)
+
+    // A rotation or a resize shrinks the arena. Anything left outside would be
+    // unreachable — an out-of-bounds vault means the player can never bank
+    // again, and stranded pixels count toward the live total so nothing new
+    // spawns. Pull everything back in.
+    this.vx = clamp(this.vx, this.x0 + this.vaultR, this.x1 - this.vaultR)
+    this.vy = clamp(this.vy, this.y0 + this.vaultR, this.y1 - this.vaultR)
+    for (const p of this.pixels) {
+      if (!p.alive) continue
+      p.x = clamp(p.x, this.x0 + 10, this.x1 - 10)
+      p.y = clamp(p.y, this.y0 + 10, this.y1 - 10)
+    }
   }
 
   private cellOf(x: number, y: number): number {

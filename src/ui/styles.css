@@ -47,13 +47,24 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 22px 16px calc(22px + env(safe-area-inset-bottom));
+  justify-content: flex-start;
+  /* Place réservée en haut pour .topbar, qui est en position absolue. */
+  padding: 56px 16px calc(22px + env(safe-area-inset-bottom));
   background: radial-gradient(ellipse at 50% 40%, rgba(20, 22, 44, 0.86), rgba(4, 4, 10, 0.97));
   backdrop-filter: blur(3px);
   animation: fade 0.22s ease;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Centrage vertical par marges automatiques plutôt que justify-content: center.
+   Avec `center`, un contenu plus haut que l'écran déborde des DEUX côtés et le
+   haut devient inatteignable — le bouton JOUER disparaissait en paysage. Ici les
+   marges se réduisent à zéro dès que ça déborde, et tout reste accessible. */
+.screen::before,
+.screen::after {
+  content: '';
+  margin-block: auto;
 }
 
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }

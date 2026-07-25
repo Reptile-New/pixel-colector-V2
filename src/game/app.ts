@@ -8,6 +8,7 @@ import { LocalLeaderboard } from '../meta/leaderboard'
 import { applyRunToMissions, rollMissions } from '../meta/missions'
 import {
   type Profile,
+  clearAllStorage,
   loadProfile,
   saveProfile,
   saveProfileNow,
@@ -62,6 +63,8 @@ export class App implements AppApi {
   private usedRevive = false
   private hintStage = 0
   private pendingInterstitial = false
+  /** Progression déjà créditée pour la run en cours (voir `finalise`). */
+  private credited = { score: 0, collected: 0, banks: 0, overclocks: 0, counted: false }
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.profile = loadProfile()
@@ -243,6 +246,7 @@ export class App implements AppApi {
     if (this.profile.settings.music) audio.startMusic()
 
     this.particles.clear()
+    this.credited = { score: 0, collected: 0, banks: 0, overclocks: 0, counted: false }
     this.run = new Run(seed, mods, this.renderer, this.particles, daily)
     this.state = 'running'
     this.usedRevive = false
@@ -288,27 +292,47 @@ export class App implements AppApi {
     this.ui.show('gameover')
   }
 
-  /** Turns a finished run into profile progression. Pure bookkeeping. */
+  /**
+   * Turns a finished run into profile progression.
+   *
+   * Runs on every death — and a run can die twice, because a rewarded-ad revive
+   * puts the player back in the same run. So everything cumulative is credited
+   * as a *delta* against what this run already gave, and the run itself is only
+   * counted once. Without this, reviving granted a second full payout of bits,
+   * a second +1 run, and double mission progress.
+   */
   private finalise(run: Run): RunResult {
     const p = this.profile
     const s = run.stats
+    const credited = this.credited
+
+    const gained = {
+      score: Math.max(0, s.score - credited.score),
+      collected: Math.max(0, s.collected - credited.collected),
+      banks: Math.max(0, s.banks - credited.banks),
+      overclocks: Math.max(0, s.overclocks - credited.overclocks),
+    }
 
     const previousBest = p.bestScore
-    touchStreak(p)
-    p.totalRuns += 1
-    p.lifetimeCollected += s.collected
-    p.lifetimeScore += s.score
+    if (!credited.counted) {
+      touchStreak(p)
+      p.totalRuns += 1
+      p.runsSinceAd += 1
+      if (s.daily) p.dailyRuns += 1
+      credited.counted = true
+    }
+    p.lifetimeCollected += gained.collected
+    p.lifetimeScore += gained.score
     p.bestScore = Math.max(p.bestScore, s.score)
     p.bestWave = Math.max(p.bestWave, s.wave)
     p.bestChain = Math.max(p.bestChain, s.bestChain)
     if (s.daily) {
       p.dailyPlayed = true
-      p.dailyRuns += 1
       p.dailyBest = Math.max(p.dailyBest, s.score)
     }
 
     const mods = resolveMods(p.upgrades)
-    const base = s.score / 40 + s.wave * 6 + s.collected * 0.35
+    const base = gained.score / 40 + (credited.counted && credited.score > 0 ? 0 : s.wave * 6) + gained.collected * 0.35
     const bits = Math.max(
       5,
       Math.round(base * (1 + mods.bitBonus) * streakMultiplier(p) * (p.entitlements.pass ? 1.25 : 1)),
@@ -319,7 +343,15 @@ export class App implements AppApi {
     // conditions ("play 5 runs") can complete on the run that satisfies them.
     const newSpecimens = this.checkSpecimens(0, true)
 
-    const completed = applyRunToMissions(p.missions, s)
+    // Missions see the delta for cumulative goals and the real value for
+    // "best of" goals, so a revive neither double-counts nor loses progress.
+    const completed = applyRunToMissions(p.missions, {
+      ...s,
+      score: gained.score,
+      collected: gained.collected,
+      banks: gained.banks,
+      overclocks: gained.overclocks,
+    })
     for (const m of completed) {
       p.bits += m.reward
       m.claimed = true
@@ -331,23 +363,27 @@ export class App implements AppApi {
     let duel: DuelOutcome | null = null
     const c = this.activeChallenge
     if (c) {
-      const r = recordDuel(p.rivals, c.name, s.score, c.score, todayKey())
+      const r = recordDuel(p.rivals, c.name, s.score, credited.score, todayKey())
       duel = {
         name: c.name,
-        theirScore: c.score,
+        theirScore: credited.score,
         yourScore: s.score,
-        won: s.score > c.score,
-        delta: Math.abs(s.score - c.score),
+        won: s.score > credited.score,
+        delta: Math.abs(s.score - credited.score),
         record: { wins: r.wins, losses: r.losses },
       }
       if (c.day) {
-        this.board.record(c.day, { name: c.name, score: c.score, wave: c.wave, chain: c.chain, you: false })
+        this.board.record(c.day, { name: c.name, score: credited.score, wave: c.wave, chain: c.chain, you: false })
       }
     }
 
     if (s.daily && p.name) void this.board.submit(todayKey(), s, p.name)
 
-    p.runsSinceAd += 1
+    credited.score = s.score
+    credited.collected = s.collected
+    credited.banks = s.banks
+    credited.overclocks = s.overclocks
+
     const isRecord = s.score > 0 && s.score > previousBest
     saveProfileNow(p)
 
@@ -540,7 +576,9 @@ export class App implements AppApi {
   }
 
   resetProgress(): void {
-    localStorage.removeItem('pixel-collector:v1')
+    // Must clear the leaderboard too: it lives under its own key, so removing
+    // only the profile left duel history behind after a "full" reset.
+    clearAllStorage()
     this.profile = loadProfile()
     this.rollDailyContent()
     this.applySettings()

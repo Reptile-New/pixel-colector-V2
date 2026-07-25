@@ -4,6 +4,20 @@ import type { MissionState } from './missions'
 
 const KEY = 'pixel-collector:v1'
 
+/** Every key this game owns. Anything added here must also be cleared on reset. */
+export const STORAGE_KEYS = [KEY, 'pixel-collector:boards'] as const
+
+/** Wipes all local data. Used by "effacer la progression". */
+export const clearAllStorage = (): void => {
+  for (const k of STORAGE_KEYS) {
+    try {
+      localStorage.removeItem(k)
+    } catch {
+      /* blocked storage — nothing to clear anyway */
+    }
+  }
+}
+
 export interface Settings {
   muted: boolean
   music: boolean

@@ -265,98 +265,113 @@ const drawBlackout = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer): voi
 
 // ───────────────────────── HUD ─────────────────────────
 
+/**
+ * Two columns, no centre column, hard width budgets.
+ *
+ * The previous layout anchored the score left, the buffer right and the
+ * multiplier dead centre — on a 360 px phone those three numbers grew into each
+ * other and overlapped. Now each column owns 46% of the width and every string
+ * is measured and shrunk to fit inside it, so nothing can ever collide.
+ *
+ * The multiplier moved next to the buffer because that is what it multiplies,
+ * and the chain timer sits right underneath it: the bar is literally how long
+ * that multiplier has left to live.
+ */
 const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number): void => {
   ctx.save()
   ctx.textBaseline = 'alphabetic'
 
-  // Score (banked, safe). Shrinks rather than colliding with the centre column.
-  const scoreText = fmt(run.stats.score)
-  let scoreSize = 34
-  ctx.font = `700 ${scoreSize}px ${MONO}`
-  const maxScoreWidth = r.w * 0.4
-  if (ctx.measureText(scoreText).width > maxScoreWidth) {
-    scoreSize = Math.max(18, Math.floor((scoreSize * maxScoreWidth) / ctx.measureText(scoreText).width))
-    ctx.font = `700 ${scoreSize}px ${MONO}`
+  const PAD = 16
+  const column = r.w * 0.46 - PAD
+
+  /** Sets the font at the largest size whose text still fits `max`. */
+  const fitFont = (text: string, ideal: number, min: number, max: number): number => {
+    let size = ideal
+    ctx.font = `700 ${size}px ${MONO}`
+    const w = ctx.measureText(text).width
+    if (w > max) {
+      size = Math.max(min, Math.floor((size * max) / w))
+      ctx.font = `700 ${size}px ${MONO}`
+    }
+    return size
   }
+
+  // ── Left column: what is already yours ──
+  const scoreText = fmt(run.stats.score)
+  fitFont(scoreText, 32, 15, column)
   ctx.fillStyle = COLORS.text
-  ctx.fillText(scoreText, 18, 52)
+  ctx.textAlign = 'left'
+  ctx.fillText(scoreText, PAD, 48)
+
   ctx.font = `500 10px ${MONO}`
   ctx.fillStyle = COLORS.dim
-  ctx.fillText('SÉCURISÉ', 18, 66)
+  ctx.fillText('SÉCURISÉ', PAD, 62)
 
-  // Buffer (at risk) — deliberately the loudest element on screen.
-  if (run.buffer > 0) {
-    const heat = clamp(run.buffer / 5000, 0, 1)
-    const wob = Math.sin(t * (7 + heat * 12)) * heat * 1.6
-    ctx.textAlign = 'right'
-    const bufText = fmt(run.buffer)
-    let bufSize = 26 + heat * 12
-    ctx.font = `700 ${bufSize}px ${MONO}`
-    const maxBufWidth = r.w * 0.36
-    if (ctx.measureText(bufText).width > maxBufWidth) {
-      bufSize = Math.max(16, (bufSize * maxBufWidth) / ctx.measureText(bufText).width)
-      ctx.font = `700 ${bufSize}px ${MONO}`
-    }
-    ctx.fillStyle = rgba(COLORS.vault, 0.85 + heat * 0.15)
-    ctx.fillText(bufText, r.w - 18 + wob, 48)
-    ctx.font = `500 10px ${MONO}`
-    ctx.fillStyle = rgba(COLORS.vaultGlow, 0.55 + heat * 0.45)
-    ctx.fillText('EN RISQUE', r.w - 18, 62)
-    ctx.textAlign = 'left'
-  }
-
-  // Multiplier
-  if (run.mult > 1) {
-    ctx.textAlign = 'center'
-    const k = clamp(run.mult / 12, 0, 1)
-    ctx.font = `700 ${22 + k * 22}px ${MONO}`
-    ctx.fillStyle = HUES[Math.max(run.lastHue, 0)].core
-    ctx.fillText(`×${run.mult}`, r.w / 2, 46)
-    ctx.textAlign = 'left'
-  }
-
-  // Chain bar
-  if (run.chain > 0) {
-    const w = 148
-    const x = r.w / 2 - w / 2
-    const p = clamp(run.chainTimer / run.chainWindow, 0, 1)
-    ctx.fillStyle = 'rgba(255,255,255,0.09)'
-    ctx.fillRect(x, 56, w, 3)
-    ctx.fillStyle = p < 0.3 ? COLORS.corrupt : COLORS.text
-    ctx.fillRect(x, 56, w * p, 3)
-    ctx.font = `500 10px ${MONO}`
-    ctx.textAlign = 'center'
-    ctx.fillStyle = COLORS.dim
-    ctx.fillText(`CHAÎNE ${run.chain} · MÊME COULEUR`, r.w / 2, 72)
-    ctx.textAlign = 'left'
-  }
-
-  // Shards
   for (let i = 0; i < run.maxShards; i++) {
-    const filled = i < run.shards
-    const x = 18 + i * 15
-    const y = 78
-    ctx.fillStyle = filled ? COLORS.player : 'rgba(255,255,255,0.13)'
+    ctx.fillStyle = i < run.shards ? COLORS.player : 'rgba(255,255,255,0.13)'
     ctx.save()
-    ctx.translate(x + 5, y + 5)
+    ctx.translate(PAD + 5 + i * 15, 83)
     ctx.rotate(Math.PI / 4)
     ctx.fillRect(-5, -5, 10, 10)
     ctx.restore()
   }
 
-  // Wave + modifier
+  // ── Right column: what you could still lose ──
   ctx.textAlign = 'right'
-  ctx.font = `700 15px ${MONO}`
+  const right = r.w - PAD
+
+  if (run.buffer > 0) {
+    const heat = clamp(run.buffer / 5000, 0, 1)
+    const wob = Math.sin(t * (7 + heat * 12)) * heat * 1.6
+    const bufText = fmt(run.buffer)
+    fitFont(bufText, 26 + heat * 10, 15, column)
+    ctx.fillStyle = rgba(COLORS.vault, 0.85 + heat * 0.15)
+    ctx.fillText(bufText, right + wob, 46)
+
+    // "EN RISQUE ×27" on one baseline, the multiplier in its own colour: measure
+    // the multiplier first so the label can be shifted left by exactly its width.
+    ctx.font = `700 12px ${MONO}`
+    const multText = run.mult > 1 ? `×${run.mult}` : ''
+    const multWidth = multText ? ctx.measureText(` ${multText}`).width : 0
+    if (multText) {
+      ctx.fillStyle = HUES[Math.max(run.lastHue, 0)].core
+      ctx.fillText(multText, right, 60)
+    }
+    ctx.font = `700 10px ${MONO}`
+    ctx.fillStyle = rgba(COLORS.vaultGlow, 0.55 + heat * 0.45)
+    ctx.fillText('EN RISQUE', right - multWidth, 60)
+  }
+
+  // Chain timer: how long the multiplier has left, drawn under what it multiplies.
+  if (run.chain > 0) {
+    const w = Math.min(126, column)
+    const x = right - w
+    const p = clamp(run.chainTimer / run.chainWindow, 0, 1)
+    ctx.fillStyle = 'rgba(255,255,255,0.10)'
+    ctx.fillRect(x, 66, w, 3)
+    ctx.fillStyle = p < 0.3 ? COLORS.corrupt : HUES[Math.max(run.lastHue, 0)].core
+    ctx.fillRect(x + w * (1 - p), 66, w * p, 3)
+  }
+
+  ctx.font = `700 14px ${MONO}`
   ctx.fillStyle = COLORS.text
-  ctx.fillText(`VAGUE ${run.waveIndex}`, r.w - 18, 84)
+  ctx.fillText(`VAGUE ${run.waveIndex}`, right, 86)
+
   const mod = modifierById(run.wave.modifier)
   if (mod) {
-    ctx.font = `700 10px ${MONO}`
+    // The longest modifier name must not spill into the left column.
+    let size = 10
+    ctx.font = `700 ${size}px ${MONO}`
+    const w = ctx.measureText(mod.name).width
+    if (w > r.w - PAD * 2) {
+      size = Math.max(7, Math.floor((size * (r.w - PAD * 2)) / w))
+      ctx.font = `700 ${size}px ${MONO}`
+    }
     ctx.fillStyle = mod.color
-    ctx.fillText(mod.name, r.w - 18, 98)
+    ctx.fillText(mod.name, right, 99)
   }
-  ctx.textAlign = 'left'
 
+  ctx.textAlign = 'left'
   drawOverclockMeter(ctx, run, r, t)
   ctx.restore()
 }
