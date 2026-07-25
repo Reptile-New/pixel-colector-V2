@@ -16,13 +16,15 @@ export const hudZones = (r: Renderer): Record<string, { x: number; y: number; w:
   const PAD = 16
   const column = r.w * 0.46 - PAD
   const meter = Math.min(320, r.w - 60)
+  const T = r.safeTop
+  const B = r.safeBottom
   return {
-    score: { x: PAD - 6, y: 20, w: column + 12, h: 50 },
-    buffer: { x: r.w - PAD - column - 6, y: 18, w: column + 12, h: 50 },
-    mult: { x: r.w - PAD - 118, y: 48, w: 124, h: 26 },
-    shards: { x: PAD - 6, y: 70, w: 92, h: 28 },
-    wave: { x: r.w - PAD - column - 6, y: 74, w: column + 12, h: 34 },
-    overclock: { x: (r.w - meter) / 2 - 10, y: r.h - 66, w: meter + 20, h: 32 },
+    score: { x: PAD - 6, y: T + 20, w: column + 12, h: 50 },
+    buffer: { x: r.w - PAD - column - 6, y: T + 18, w: column + 12, h: 50 },
+    mult: { x: r.w - PAD - 118, y: T + 48, w: 124, h: 26 },
+    shards: { x: PAD - 6, y: T + 70, w: 92, h: 28 },
+    wave: { x: r.w - PAD - column - 6, y: T + 74, w: column + 12, h: 34 },
+    overclock: { x: (r.w - meter) / 2 - 10, y: r.h - B - 66, w: meter + 20, h: 32 },
   }
 }
 
@@ -348,6 +350,8 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
 
   const PAD = 16
   const column = r.w * 0.46 - PAD
+  // Everything the HUD draws is pushed below the notch / status bar.
+  const T = r.safeTop
 
   /** Sets the font at the largest size whose text still fits `max`. */
   const fitFont = (text: string, ideal: number, min: number, max: number): number => {
@@ -366,16 +370,16 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
   fitFont(scoreText, 32, 15, column)
   ctx.fillStyle = COLORS.text
   ctx.textAlign = 'left'
-  ctx.fillText(scoreText, PAD, 48)
+  ctx.fillText(scoreText, PAD, T + 48)
 
   ctx.font = `500 10px ${MONO}`
   ctx.fillStyle = COLORS.dim
-  ctx.fillText('SÉCURISÉ', PAD, 62)
+  ctx.fillText('SÉCURISÉ', PAD, T + 62)
 
   for (let i = 0; i < run.maxShards; i++) {
     ctx.fillStyle = i < run.shards ? COLORS.player : 'rgba(255,255,255,0.13)'
     ctx.save()
-    ctx.translate(PAD + 5 + i * 15, 83)
+    ctx.translate(PAD + 5 + i * 15, T + 83)
     ctx.rotate(Math.PI / 4)
     ctx.fillRect(-5, -5, 10, 10)
     ctx.restore()
@@ -391,7 +395,7 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
     const bufText = fmt(run.buffer)
     fitFont(bufText, 26 + heat * 10, 15, column)
     ctx.fillStyle = rgba(COLORS.vault, 0.85 + heat * 0.15)
-    ctx.fillText(bufText, right + wob, 46)
+    ctx.fillText(bufText, right + wob, T + 46)
 
     // "EN RISQUE ×27" on one baseline, the multiplier in its own colour: measure
     // the multiplier first so the label can be shifted left by exactly its width.
@@ -400,11 +404,11 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
     const multWidth = multText ? ctx.measureText(` ${multText}`).width : 0
     if (multText) {
       ctx.fillStyle = HUES[Math.max(run.lastHue, 0)].core
-      ctx.fillText(multText, right, 60)
+      ctx.fillText(multText, right, T + 60)
     }
     ctx.font = `700 10px ${MONO}`
     ctx.fillStyle = rgba(COLORS.vaultGlow, 0.55 + heat * 0.45)
-    ctx.fillText('EN RISQUE', right - multWidth, 60)
+    ctx.fillText('EN RISQUE', right - multWidth, T + 60)
   }
 
   // Chain timer: how long the multiplier has left, drawn under what it multiplies.
@@ -413,14 +417,14 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
     const x = right - w
     const p = clamp(run.chainTimer / run.chainWindow, 0, 1)
     ctx.fillStyle = 'rgba(255,255,255,0.10)'
-    ctx.fillRect(x, 66, w, 3)
+    ctx.fillRect(x, T + 66, w, 3)
     ctx.fillStyle = p < 0.3 ? COLORS.corrupt : HUES[Math.max(run.lastHue, 0)].core
-    ctx.fillRect(x + w * (1 - p), 66, w * p, 3)
+    ctx.fillRect(x + w * (1 - p), T + 66, w * p, 3)
   }
 
   ctx.font = `700 14px ${MONO}`
   ctx.fillStyle = COLORS.text
-  ctx.fillText(`VAGUE ${run.waveIndex}`, right, 86)
+  ctx.fillText(`VAGUE ${run.waveIndex}`, right, T + 86)
 
   const mod = modifierById(run.wave.modifier)
   if (mod) {
@@ -433,7 +437,7 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
       ctx.font = `700 ${size}px ${MONO}`
     }
     ctx.fillStyle = mod.color
-    ctx.fillText(mod.name, right, 99)
+    ctx.fillText(mod.name, right, T + 99)
   }
 
   ctx.textAlign = 'left'
@@ -444,7 +448,7 @@ const drawHud = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number
 const drawOverclockMeter = (ctx: CanvasRenderingContext2D, run: Run, r: Renderer, t: number): void => {
   const w = Math.min(320, r.w - 60)
   const x = (r.w - w) / 2
-  const y = r.h - 46
+  const y = r.h - 46 - r.safeBottom
   const ready = run.charge >= 1
   const active = run.overclock > 0
 

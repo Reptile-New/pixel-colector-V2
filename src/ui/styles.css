@@ -46,8 +46,7 @@ html, body {
    tutoriel impossible à suivre. */
 #ui > #toasts,
 #ui > .tuto,
-#ui > .hint { pointer-events: none; }
-
+#ui > 
 /* ── Screens ────────────────────────────────────────────── */
 
 .screen {
@@ -58,7 +57,7 @@ html, body {
   align-items: center;
   justify-content: flex-start;
   /* Place réservée en haut pour .topbar, qui est en position absolue. */
-  padding: 56px 16px calc(22px + env(safe-area-inset-bottom));
+  padding: calc(56px + env(safe-area-inset-top)) 16px calc(22px + env(safe-area-inset-bottom));
   background: radial-gradient(ellipse at 50% 40%, rgba(20, 22, 44, 0.86), rgba(4, 4, 10, 0.97));
   backdrop-filter: blur(3px);
   animation: fade 0.22s ease;
@@ -195,7 +194,7 @@ button.small { padding: 9px 12px; font-size: 11px; letter-spacing: 0.09em; }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: calc(12px + env(safe-area-inset-top)) 14px 12px;
   font-size: 11px;
   letter-spacing: 0.14em;
 }
@@ -263,7 +262,7 @@ button.small { padding: 9px 12px; font-size: 11px; letter-spacing: 0.09em; }
 
 #toasts {
   position: absolute;
-  top: 116px;
+  top: calc(116px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -359,7 +358,7 @@ button.small { padding: 9px 12px; font-size: 11px; letter-spacing: 0.09em; }
   position: absolute;
   left: 0;
   right: 0;
-  top: 118px;
+  top: calc(118px + env(safe-area-inset-top));
   display: flex;
   justify-content: center;
   padding: 0 14px;

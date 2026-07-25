@@ -64,7 +64,6 @@ export class App implements AppApi {
   private clock = 0
   private specimenTimer = 0
   private usedRevive = false
-  private hintStage = 0
   private pendingInterstitial = false
   /** Progression déjà créditée pour la run en cours (voir `finalise`). */
   private credited = { score: 0, collected: 0, banks: 0, overclocks: 0, counted: false }
@@ -173,7 +172,6 @@ export class App implements AppApi {
       this.run.update(dt, this.input)
       this.consumeEvents()
       this.checkSpecimens(dt)
-      this.updateHints()
       if (this.run.dead) this.endRun()
     }
 
@@ -266,8 +264,7 @@ export class App implements AppApi {
     this.usedRevive = false
     this.canRevive = false
     this.specimenTimer = 0
-    this.hintStage = this.profile.totalRuns < 2 ? 1 : 0
-    this.ui.showRunChrome(this.hintStage ? 'RÉCOLTE LES PIXELS' : null)
+    this.ui.showRunChrome(null)
   }
 
   /** Starts the guided run. Upgrades are neutralised so the script is predictable. */
@@ -394,16 +391,15 @@ export class App implements AppApi {
 
   private endRun(): void {
     if (!this.run) return
-    if (this.tutorial) {
-      // Dying during the tutorial is not a failure: put the player back on their
-      // feet rather than throwing a score screen at someone still learning.
-      this.tutorial.skip(this.run)
-      this.tutorial = null
-      this.profile.seenIntro = true
+    if (this.tutorial && !this.tutorial.finished) {
+      // Dying mid-tutorial must NOT end the lesson. Beginners die constantly —
+      // that is the whole reason they are here — and dropping them out of the
+      // guide at that exact moment leaves them with no idea what happened.
+      // Put them back on their feet and carry on at the same step.
       this.run.revive()
       this.state = 'running'
-      this.ui.showRunChrome(null)
-      this.ui.toast('TU AS PERDU UNE VIE — LA VRAIE PARTIE COMMENCE', 'danger')
+      this.refreshTutorialPanel()
+      this.ui.toast('TOUCHÉ — TU REPARS, LE TUTO CONTINUE', 'danger')
       return
     }
     this.state = 'over'
@@ -561,20 +557,6 @@ export class App implements AppApi {
     }
     if (found.length) saveProfile(p)
     return found
-  }
-
-  // ───────────────────────── hints ─────────────────────────
-
-  private updateHints(): void {
-    if (!this.hintStage || !this.run) return
-    if (this.hintStage === 1 && this.run.buffer > 120) {
-      this.hintStage = 2
-      this.ui.showRunChrome('DÉPOSE AU VAULT ▣ POUR SÉCURISER TON SCORE')
-    } else if (this.hintStage === 2 && this.run.stats.banks > 0) {
-      this.hintStage = 3
-      this.ui.showRunChrome('MÊME COULEUR D\'AFFILÉE = MULTIPLICATEUR')
-      setTimeout(() => this.ui.clearHint(), 3600)
-    }
   }
 
   // ───────────────────────── monetisation ─────────────────────────

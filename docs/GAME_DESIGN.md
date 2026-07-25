@@ -18,8 +18,8 @@ qui produit le « allez, encore une partie ».
 |---|---|
 | **Le Curseur** | Le joueur. Déplacement analogique continu (souris / doigt / WASD), inertie + friction : il y a une vraie courbe de maîtrise. |
 | **Les Pixels** | 5 couleurs. Ramassés → entrent dans le **BUFFER** (score *non sécurisé*). |
-| **La Chaîne** | Ramasser 2 pixels de la **même couleur** d'affilée fait monter le multiplicateur (×1 → ×2 → ×3…). Changer de couleur remet la chaîne à 1. La chaîne se dégrade si tu ne ramasses rien pendant ~2,5 s. |
-| **Le Vault** | Un nœud qui pulse ailleurs sur la grille. Le toucher **banque** `buffer × multiplicateur` dans le score définitif, puis il se téléporte. |
+| **La Chaîne** | Ramasser la **même couleur** d'affilée fait monter la valeur de **chaque pixel suivant** : +10 tout seul, +50 au cinquième. Changer de couleur **divise la chaîne par deux** (pas de remise à zéro : un pixel effleuré par accident ne doit pas anéantir une minute de travail). Elle se dégrade aussi si tu ne ramasses rien assez vite. |
+| **Le Vault** | Un nœud qui pulse ailleurs sur la grille. Le toucher **sécurise le buffer** dans le score définitif, puis il se téléporte. |
 | **Les Hunters** | Pixels corrompus qui te traquent. **Leur vitesse augmente avec la taille de ton buffer.** Plus tu es riche, plus tu es chassé. |
 | **La Corruption** | Des cellules deviennent hostiles et se propagent depuis les bords : l'arène rétrécit. Force le mouvement, empêche le camping. |
 | **Les Éclats** | 3 points de vie. Être touché = −1 éclat **et perte totale du buffer**. Le score banqué, lui, est intouchable. |
@@ -35,6 +35,35 @@ se sent responsable*. C'est la définition d'une bonne boucle de jeu.
 Le buffer n'est pas qu'un nombre : plus il grossit, plus **l'écran réagit** — le drone sonore
 monte, une aura pulse autour du curseur, les hunters accélèrent, la vignette se resserre.
 Le joueur *sent* qu'il joue avec le feu sans lire un seul chiffre.
+
+### Pourquoi le multiplicateur se gagne à la collecte, et pas au dépôt
+
+La première version appliquait le multiplicateur **au moment du dépôt**, sur tout le
+buffer. Le calcul montre que ça produisait une stratégie optimale absurde :
+
+| Stratégie (60 pixels) | Score |
+|---|---|
+| Ramasser au hasard, déposer | 734 |
+| Ramasser au hasard, puis « pêcher » 6 pixels d'une couleur juste avant le vault | **4 428** |
+| Router proprement toute la partie | 3 288 |
+
+Autrement dit : **jouer salement puis tricher 3 secondes battait jouer bien.** Et
+aucun joueur ne pouvait déduire ça — un testeur a d'ailleurs signalé, à raison,
+qu'il « doutait que chercher les couleurs soit rentable ».
+
+Le multiplicateur s'applique donc maintenant **à chaque pixel, au moment où on le
+ramasse**. Un pop-up affiche la valeur réelle (`+50 ×5`). Résultat mesuré en jeu :
+router proprement rapporte **17× plus** que ramasser au hasard, la « pêche » finale
+ne rapporte plus rien de spécial, et le joueur *voit* le lien de cause à effet à
+chaque ramassage au lieu de devoir le déduire.
+
+### L'aimant n'attire que ta couleur
+
+Corollaire indispensable : tant que l'aimant aspirait tout, viser une couleur était
+impossible — on ne pouvait pas passer à côté d'un pixel sans l'avaler, et la chaîne
+semblait subie plutôt que choisie. L'aimant n'attire désormais **que la couleur de la
+chaîne en cours**. Les autres exigent un contact réel. L'outil qui sabotait la
+mécanique principale la sert maintenant.
 
 ### L'Overclock (expression de skill)
 Une jauge se remplit en chaînant. Activation → ralenti, aimantation totale des pixels,

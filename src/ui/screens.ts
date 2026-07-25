@@ -9,7 +9,7 @@ import { SKINS } from '../render/palette'
 
 export type ScreenId =
   | 'none' | 'menu' | 'album' | 'upgrades' | 'shop' | 'settings' | 'gameover' | 'pause'
-  | 'challenge' | 'rivals' | 'intro'
+  | 'challenge' | 'rivals' | 'intro' | 'daily'
 
 export interface DuelOutcome {
   name: string
@@ -112,7 +112,8 @@ export class Ui {
     const a = this.app
     switch (act) {
       case 'start': a.start(false); break
-      case 'daily': a.start(true); break
+      case 'daily': this.show('daily'); break
+      case 'dailyGo': a.start(true); break
       case 'go':
         // Entering a screen on purpose starts at the top; only in-place
         // refreshes (a purchase, a toggle) keep the scroll position.
@@ -192,6 +193,7 @@ export class Ui {
       challenge: () => this.challenge(),
       rivals: () => this.rivals(),
       intro: () => this.intro(),
+      daily: () => this.daily(),
     }
     const screen = builders[id]()
     this.root.appendChild(screen)
@@ -207,12 +209,14 @@ export class Ui {
     }
   }
 
-  /** In-run chrome: a discreet pause button plus contextual first-run hints. */
-  showRunChrome(hint: string | null): void {
+  /**
+   * In-run chrome. The old floating hint line lived here too; the guided tutorial
+   * replaced it, and it was overlapping the overclock label at the bottom.
+   */
+  showRunChrome(_hint: string | null = null): void {
     this.root.querySelectorAll('.screen, .pause-btn, .hint, .tuto').forEach((n) => n.remove())
     this.current = 'none'
     this.root.appendChild(el('<button class="pause-btn ghost" data-act="go" data-arg="pause">PAUSE</button>'))
-    if (hint) this.root.appendChild(el(`<div class="hint">${hint}</div>`))
   }
 
   /**
@@ -247,10 +251,6 @@ export class Ui {
     )
   }
 
-  clearHint(): void {
-    this.root.querySelector('.hint')?.remove()
-  }
-
   // ───────────────────────── screens ─────────────────────────
 
   private topbar(): string {
@@ -270,7 +270,10 @@ export class Ui {
         const pct = Math.min(100, (m.progress / m.target) * 100)
         const done = m.progress >= m.target
         return `<div class="mission ${done ? 'done' : ''}">
-          <div class="t"><span>${missionLabel(m)}</span><b>${done ? '✓ ' : ''}+${m.reward}</b></div>
+          <div class="t">
+            <span style="${done ? 'color:var(--dim);text-decoration:line-through' : ''}">${missionLabel(m)}</span>
+            <b>${done ? `✓ +${m.reward} REÇUS` : `+${m.reward}`}</b>
+          </div>
           <div class="bar"><i style="width:${pct}%"></i></div>
         </div>`
       })
@@ -284,8 +287,8 @@ export class Ui {
 
       <div class="stack">
         <button class="primary" data-act="start">JOUER</button>
-        <button class="gold" data-act="daily" ${dailyDone ? 'disabled' : ''}>
-          ${dailyDone ? `RUN DU JOUR TERMINÉE — ${fmt(p.dailyBest)}` : 'RUN DU JOUR'}
+        <button class="gold" data-act="daily">
+          ${dailyDone ? `RUN DU JOUR TERMINÉE — ${fmt(p.dailyBest)}` : 'RUN DU JOUR · 1 ESSAI'}
         </button>
         <div class="row">
           <button data-act="go" data-arg="album">ALBUM</button>
@@ -310,7 +313,12 @@ export class Ui {
 
       ${this.app.canInstall ? '<div class="stack" style="margin-top:12px"><button data-act="install">⬇ AJOUTER À L\'ÉCRAN D\'ACCUEIL</button></div>' : ''}
 
-      ${p.missions.length ? `<div class="panel" style="margin-top:14px"><h2>MISSIONS DU JOUR</h2>${missions}</div>` : ''}
+      ${
+        p.missions.length
+          ? `<div class="panel" style="margin-top:14px"><h2>MISSIONS DU JOUR</h2>${missions}
+             <div class="footnote" style="margin-top:10px">Les bits sont versés automatiquement en fin de partie. Rien à réclamer.</div></div>`
+          : ''
+      }
       <div class="footnote" style="text-align:center;max-width:420px">
         Souris / doigt pour te déplacer · ESPACE pour l'overclock<br>
         Le score en risque n'est à toi qu'une fois déposé au vault.
@@ -337,6 +345,42 @@ export class Ui {
       <div class="stack">
         <button class="primary" data-act="tuto">APPRENDRE À JOUER · 1 MIN</button>
         <button class="ghost small" data-act="start">NON MERCI, JE ME LANCE</button>
+      </div>
+    </div>`)
+  }
+
+  /** The Daily Run needs explaining: one shot, same arena for everyone, today only. */
+  private daily(): HTMLElement {
+    const p = this.app.profile
+    const played = p.dailyPlayed
+    return el(`<div class="screen">
+      ${this.topbar()}
+      <h1 class="title" style="font-size:clamp(24px,7vw,38px)">RUN DU JOUR</h1>
+      <div class="tagline">MÊME PARTIE POUR TOUT LE MONDE</div>
+
+      <div class="panel">
+        <div class="footnote" style="font-size:12px;line-height:1.8">
+          Chaque jour, le jeu génère <b>une arène identique pour tous les joueurs</b> :
+          mêmes pixels, mêmes traqueurs, mêmes vagues.<br><br>
+          Tu n'as droit qu'à <b>un seul essai</b>. Pas de seconde chance, pas de
+          relance jusqu'à avoir de la chance — c'est ce qui rend la comparaison honnête.<br><br>
+          À la fin, tu peux <b>envoyer ton score à tes potes</b> : ils joueront
+          exactement la même partie que toi.
+        </div>
+      </div>
+
+      ${
+        played
+          ? `<div class="panel"><div class="kv"><span>TON SCORE DU JOUR</span><span style="color:var(--gold)">${fmt(p.dailyBest)}</span></div>
+             <div class="footnote" style="margin-top:8px">Reviens demain pour une nouvelle arène.</div></div>`
+          : ''
+      }
+
+      <div class="stack">
+        <button class="gold" data-act="dailyGo" ${played ? 'disabled' : ''}>
+          ${played ? 'DÉJÀ JOUÉE AUJOURD\'HUI' : 'LANCER — UN SEUL ESSAI'}
+        </button>
+        <button data-act="menu">RETOUR</button>
       </div>
     </div>`)
   }

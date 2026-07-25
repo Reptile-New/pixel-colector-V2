@@ -10,6 +10,13 @@ import type { RunMods } from './upgrades'
 import { WAVE_DURATION, type WaveSpec, buildWave } from './waves'
 
 export const CELL = 38
+/** Base worth of a pixel, before the chain multiplies it. */
+export const PIXEL_VALUE = 10
+/** Beyond this the chain stops raising a pixel's value — but the counter keeps
+ *  climbing, because specimens and missions ask for chains far longer than this. */
+export const VALUE_CAP = 14
+/** Hard ceiling on the counter itself. */
+export const CHAIN_CAP = 60
 
 export interface Pixel {
   alive: boolean
@@ -71,7 +78,7 @@ export class Run {
   shards = 3
   maxShards = 3
   invuln = 0
-  magnet = 46
+  magnet = 34
   aura = 0
 
   // Economy
@@ -133,7 +140,7 @@ export class Run {
 
     this.maxShards = 3 + mods.extraShards
     this.shards = this.maxShards
-    this.magnet = 46 + mods.magnetBonus
+    this.magnet = 34 + mods.magnetBonus
     this.chainMax = 2.5 + mods.chainTimeBonus
 
     this.layout()
@@ -151,8 +158,8 @@ export class Run {
     const pad = 14
     this.x0 = pad
     this.x1 = r.w - pad
-    this.y0 = 104
-    this.y1 = r.h - 88
+    this.y0 = 104 + r.safeTop
+    this.y1 = r.h - 88 - r.safeBottom
     const cols = Math.max(4, Math.ceil((this.x1 - this.x0) / CELL))
     const rows = Math.max(4, Math.ceil((this.y1 - this.y0) / CELL))
     if (cols !== this.cols || rows !== this.rows) {
@@ -453,7 +460,13 @@ export class Run {
       p.bob += dt * 3
       const d2 = dist2(p.x, p.y, this.px, this.py)
 
-      if (d2 < magnetR2) {
+      // The magnet only attracts the colour you are currently chaining. Pulling
+      // everything made deliberate colour play impossible: you could not walk
+      // past a pixel without swallowing it, so the chain felt random rather than
+      // chosen. Off-colour pixels now require actual contact.
+      const attracts = this.overclock > 0 || this.chain === 0 || p.hue === this.lastHue
+
+      if (attracts && d2 < magnetR2) {
         const d = Math.sqrt(d2) || 1
         // Pull strength ramps as it gets closer: a satisfying "snap" instead of a drift.
         const pull = (1 - d / magnetR) * (this.overclock > 0 ? 1500 : 780)
@@ -485,17 +498,20 @@ export class Run {
       return
     }
 
-    // The chain IS the multiplier: it only grows on a repeated colour, so it is
-    // naturally self-limiting and rewards *routing*, not just hoovering.
-    if (p.hue === this.lastHue) this.chain = Math.min(this.chain + 1, 40)
-    else this.chain = 1
+    // Wrong colour halves the chain instead of wiping it. Accidentally brushing
+    // a stray pixel should cost something, not undo a whole minute of routing.
+    if (p.hue === this.lastHue) this.chain = Math.min(this.chain + 1, CHAIN_CAP)
+    else this.chain = Math.max(1, Math.floor(this.chain / 2))
     this.mult = this.chain
     this.chainTimer = this.chainWindow
     this.lastHue = p.hue
 
-    // Bounded flow bonus. The real scaling lives in the bank multiplier, so a
-    // long run can never turn into runaway exponential scoring.
-    let value = 12 * (1 + Math.min(this.chain, 30) * 0.02)
+    // The multiplier is earned *as you collect*, not snapshotted when you bank.
+    // Applying it at the vault made the optimal play "hoover at random, then
+    // fish six of one colour right before depositing" — six times better than
+    // playing well, and impossible for a player to deduce. Now every same-colour
+    // pixel is visibly worth more, the moment you take it.
+    let value = PIXEL_VALUE * Math.min(this.chain, VALUE_CAP)
     if (p.golden) value *= 5
     if (this.overclock > 0) value *= 2
     if (this.wave.modifier === 'fragile') value *= 2
@@ -512,7 +528,15 @@ export class Run {
 
     audio.collect(hue.note, this.chain)
     this.particles.burst(p.x, p.y, p.golden ? COLORS.vault : hue.core, p.golden ? 14 : 7, p.golden ? 260 : 170, p.golden ? 5 : 3.5)
-    if (this.mult >= 2) this.particles.popup(p.x, p.y - 16, `×${this.mult}`, hue.core, 13 + Math.min(this.mult, 12))
+    // The number that teaches the whole game: a chained pixel is visibly worth
+    // several times a random one.
+    this.particles.popup(
+      p.x,
+      p.y - 16,
+      this.chain >= 2 ? `+${value} ×${this.chain}` : `+${value}`,
+      this.chain >= 2 ? hue.core : COLORS.dim,
+      12 + Math.min(this.chain, 12),
+    )
     if (p.golden) {
       this.particles.ring(p.x, p.y, COLORS.vault, 52, 0.45)
       this.renderer.punchZoom(0.008)
@@ -643,7 +667,9 @@ export class Run {
       this.placeVault()
       return
     }
-    const amount = Math.round(this.buffer * this.mult * (1 + this.mods.vaultBonus))
+    // Banking secures; it no longer multiplies. All the multiplication already
+    // happened, pixel by pixel, where the player could see it.
+    const amount = Math.round(this.buffer * (1 + this.mods.vaultBonus))
     this.stats.score += amount
     this.stats.banks += 1
     this.stats.bestBank = Math.max(this.stats.bestBank, amount)
@@ -665,8 +691,6 @@ export class Run {
     this.events.push({ type: 'bank', x: this.vx, y: this.vy, amount, mult: this.mult })
 
     this.buffer = 0
-    this.mult = 1
-    this.lastHue = -1
     this.placeVault()
   }
 

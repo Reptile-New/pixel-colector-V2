@@ -6,6 +6,14 @@ import { COLORS, rgba } from './palette'
  * The scene is drawn into an offscreen buffer so post-processing is a single
  * composite instead of a per-object cost.
  */
+/** Hidden element whose height *is* the inset, so JS can read it. */
+const makeProbe = (side: 'top' | 'bottom'): HTMLDivElement => {
+  const d = document.createElement('div')
+  d.style.cssText = `position:fixed;${side}:0;left:0;width:0;visibility:hidden;pointer-events:none;height:env(safe-area-inset-${side},0px)`
+  document.body.appendChild(d)
+  return d
+}
+
 export class Renderer {
   readonly canvas: HTMLCanvasElement
   readonly ctx: CanvasRenderingContext2D
@@ -31,6 +39,19 @@ export class Renderer {
   /** Disabled automatically on weak devices to protect the frame budget. */
   postEnabled = true
 
+  /**
+   * Notch / status bar / home indicator, in CSS pixels.
+   *
+   * The page is rendered edge-to-edge (`viewport-fit=cover`), so on an iPhone the
+   * clock, battery and signal sit *on top of* the canvas. Anything the HUD draws
+   * up there is unreadable. Canvas has no access to `env(safe-area-inset-*)`, so
+   * the values are measured from two hidden probe elements.
+   */
+  safeTop = 0
+  safeBottom = 0
+  private probeTop!: HTMLDivElement
+  private probeBottom!: HTMLDivElement
+
   private scene: HTMLCanvasElement
   private sctx: CanvasRenderingContext2D
   private scanlines: HTMLCanvasElement | null = null
@@ -49,12 +70,17 @@ export class Renderer {
     // Mid-range phones choke on the post pass; keep 60fps over eye candy.
     this.postEnabled = (navigator.hardwareConcurrency ?? 4) > 3
 
+    this.probeTop = makeProbe('top')
+    this.probeBottom = makeProbe('bottom')
+
     this.resize()
     window.addEventListener('resize', () => this.resize())
     window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 120))
   }
 
   resize(): void {
+    this.safeTop = this.probeTop?.offsetHeight ?? 0
+    this.safeBottom = this.probeBottom?.offsetHeight ?? 0
     const rect = this.canvas.getBoundingClientRect()
     // Cap DPR: a 3x retina phone gains nothing visually here and loses half its framerate.
     this.dpr = clamp(window.devicePixelRatio || 1, 1, 2)
